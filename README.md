@@ -64,9 +64,31 @@ non-null assertions it would require add noise without catching real bugs here.
 
 `main` deploys to AWS through GitHub Actions using **OIDC** — no long-lived AWS
 keys are stored in the repo. The one-time IAM bootstrap (identity provider +
-role whose trust policy is scoped to this repo's `main`) is in `docs/CICD.md`;
-until that bootstrap and the SST config (story E0.2) are in place, the deploy
-workflow is expected to fail on the AWS step while CI stays green.
+role whose trust policy is scoped to this repo's `main`) is in `docs/CICD.md`.
+
+Infrastructure is declared in `sst.config.ts` (region `eu-north-1`): DynamoDB
+table, Cognito user pool with an invite-only pre-sign-up trigger, the Hono API
+on Lambda with a streaming Function URL, the static site on S3 + CloudFront, and
+a €5 billing alarm as a tripwire — everything else is free-tier.
+
+Before the first deploy, set the secrets (they land in SSM, never in GitHub):
+
+```bash
+npx sst secret set SignupAllowlist "you@example.com" --stage prod
+npx sst secret set AnthropicApiKey "sk-ant-..."      --stage prod
+npx sst secret set OpenaiApiKey    "sk-..."          --stage prod   # optional
+npx sst deploy --stage prod
+```
+
+`SignupAllowlist` is what makes this instance invite-only. It **fails closed**:
+an unset or empty allowlist rejects every registration, because failing open
+would mean an open sign-up endpoint attached to a paid AI key. A single `@domain`
+entry admits a whole domain.
+
+Until that bootstrap has run, the deploy workflow is expected to fail on the AWS
+step while CI stays green. `api/sst-env.d.ts` is a hand-written stand-in for the
+resource typings SST generates on first deploy; delete it once the generated
+`sst-env.d.ts` exists.
 
 ## Health guardrails
 

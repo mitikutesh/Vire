@@ -33,4 +33,10 @@ export default tseslint.config(
     files: ['api/**/*.ts', '*.config.{ts,js}'],
     languageOptions: { globals: globals.node },
   },
+  {
+    // SST types its config through a triple-slash reference to generated
+    // platform types; there is no import form for it.
+    files: ['sst.config.ts'],
+    rules: { '@typescript-eslint/triple-slash-reference': 'off' },
+  },
 );
