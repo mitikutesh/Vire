@@ -2,8 +2,9 @@
 
 ## Implementation status (updated 2026-08-07)
 
-**Milestone M0 is complete**, plus the provider layer from M2. 220 tests;
-lint, typecheck, format and the static build are clean; one commit per story.
+**Milestone M0 is complete**, plus the AI provider layer from M2 and the auth
+flows from M1. 254 tests; lint, typecheck, format and the static build are
+clean; one commit per story.
 
 | Story                             | State      | Note                                                            |
 | --------------------------------- | ---------- | --------------------------------------------------------------- |
@@ -15,7 +16,8 @@ lint, typecheck, format and the static build are clean; one commit per story.
 | E0.6 Data layer & isolation tests | ✅ done    |                                                                 |
 | E0.7 Pure-logic port              | ✅ done    | Calorie floors covered                                          |
 | E2.0 AI provider layer            | ✅ done    | Anthropic + OpenAI, contract suite                              |
-| E1.1 → E5.4                       | ⬜ next    | Implementable locally; see below                                |
+| E1.1 Auth flows & invite-only     | ✅ done    | Port + fake tested; Cognito adapter unverified                  |
+| E1.2 → E5.4                       | ⬜ next    | Implementable locally; see below                                |
 | E6.1 → E6.4 (iOS)                 | 🔒 blocked | Needs Xcode, an Apple Developer account and a device/TestFlight |
 | E7.5 Kesko API                    | 🔒 blocked | Needs the owner to register at developer.kesko.fi               |
 
