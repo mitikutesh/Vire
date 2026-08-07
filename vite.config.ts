@@ -22,6 +22,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // Vitest stubs CSS imports to empty by default; the design-token test
+    // reads index.css via `?raw` to assert the locked palette is present and
+    // the retired green accent is not.
+    css: true,
     // Playwright owns e2e/; vitest must not try to run those specs.
     exclude: ['e2e/**', 'node_modules/**', 'dist/**', '.sst/**'],
     coverage: {

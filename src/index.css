@@ -1,3 +1,116 @@
 @import 'tailwindcss';
 
-/* Design tokens, self-hosted fonts and the .disp utility arrive in E0.3. */
+/* Self-hosted variable fonts. Deliberately not Google Fonts: a network round
+   trip there makes the cloudberry "Vire" wordmark flash an unstyled fallback
+   on first paint, and the wordmark is the whole brand (CLAUDE.md rule 2). */
+@import '@fontsource-variable/bricolage-grotesque/wght.css';
+@import '@fontsource-variable/instrument-sans/wght.css';
+
+/* ─────────────────────────── design tokens ───────────────────────────
+   LOCKED palette from CLAUDE.md. The user approved this system and rejected
+   two alternatives; treat these values as product decisions, not styling.
+
+   The pine / pineSoft green tokens are intentionally ABSENT — the green accent
+   was retired at the user's request. src/design/tokens.test.ts fails the build
+   if either value creeps back into a declaration.
+   ------------------------------------------------------------------- */
+@theme {
+  --color-paper: #f1f2ed; /* birch white — app background */
+  --color-card: #ffffff;
+  --color-ink: #14342b; /* deep spruce — text AND primary buttons */
+  --color-sub: #5f6e66; /* secondary text */
+  --color-line: #dfe4dc; /* borders, hairlines */
+
+  /* cloudberry — THE accent: wordmark, "now" energy, offers, movement,
+     progress ring/bars, checkmarks, done-states, kcal chip, category
+     headers, active nav tab, focus outline */
+  --color-cloud: #dd8f1f;
+  --color-cloud-soft: #faf0dc;
+
+  /* lake — water AND text links (the only two uses) */
+  --color-lake: #3e7fa5;
+  --color-lake-soft: #e3eef5;
+
+  /* berry — over budget, errors, destructive confirm */
+  --color-berry: #b5484d;
+  --color-berry-soft: #f6e4e4;
+
+  /* Store chain tags keep each chain's own brand colors: this is functional
+     identification while shopping, not app accent (CLAUDE.md). */
+  --color-store-s: #2e7d32;
+  --color-store-s-soft: #e3f0e0;
+  --color-store-k: #d35400;
+  --color-store-k-soft: #fbe9dc;
+  --color-store-l: #1a5fa8;
+  --color-store-l-soft: #e1eaf6;
+
+  --font-sans: 'Instrument Sans Variable', system-ui, sans-serif;
+  --font-disp: 'Bricolage Grotesque Variable', 'Instrument Sans Variable', sans-serif;
+}
+
+/* Display face. Named `disp` to match the prototype's class so ported markup
+   reads the same as its source of truth. */
+@utility disp {
+  font-family: var(--font-disp);
+  letter-spacing: -0.01em;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* Cloudberry focus ring on every interactive element, including the
+   role="checkbox" meal toggles. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='checkbox']:focus-visible {
+  outline: 2px solid var(--color-cloud);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* The pulsing "now" marker on the DayStrip — the app's signature element. */
+@keyframes vpulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.75;
+  }
+}
+
+.pulse {
+  animation: vpulse 2.2s ease-in-out infinite;
+}
+
+@keyframes vspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: vspin 1s linear infinite;
+}
+
+/* Keep the number steppers visible — profile setup is all numeric entry. */
+input[type='number']::-webkit-inner-spin-button {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
