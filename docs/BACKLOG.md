@@ -1,10 +1,10 @@
 # Vire — Product Backlog
 
-## Implementation status (updated 2026-08-07)
+## Implementation status (updated 2026-08-08)
 
-**Milestone M0 is complete**, plus the AI provider layer from M2 and both M1
-stories. 311 unit tests and an end-to-end onboarding test in real WebKit; lint,
-typecheck, format and the static build are clean; one commit per story.
+**Milestone M0 is complete**, plus both M1 stories and the first three of M2.
+332 unit tests and an end-to-end onboarding test in real WebKit; lint, typecheck,
+format and the static build are clean; one commit per story.
 
 | Story                             | State      | Note                                                                                          |
 | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
@@ -19,7 +19,9 @@ typecheck, format and the static build are clean; one commit per story.
 | E1.1 Auth flows & invite-only     | ✅ done    | Port + fake tested; Cognito adapter unverified                                                |
 | E1.2 Profile & settings           | ✅ done    | Target computed server-side; dialog focus-trapped                                             |
 | E1.3 Google sign-in infra         | 🔒 blocked | Needs a Google Cloud OAuth client from the owner                                              |
-| E2.1 → E5.4                       | ⬜ next    | Implementable locally; see below                                                              |
+| E2.1 Generation API               | ✅ done    | Streamed, per-day retry with backoff, 10/day limit; P95 unmeasured until deploy                |
+| E2.2 Plan activation transaction  | ✅ done    | Store helper from E0.6, exercised by the generate and starter routes                            |
+| E2.3 → E5.4                       | ⬜ next    | Implementable locally; see below                                                              |
 | E6.1 → E6.4 (iOS)                 | 🔒 blocked | Needs Xcode, an Apple Developer account and a device/TestFlight                               |
 | E7.5 Kesko API                    | ❌ closed  | Portal admits only Azure AD identities Kesko onboards — no route for an individual (PLAN §12) |
 
@@ -227,6 +229,14 @@ nothing is worse than no button.
 - AC: grocery items aggregated server-side with content-stable ids.
 - Tasks: route, prompt port, schema, streaming, retries, rate limiting, unit
   tests with fixtures.
+- Done: `api/routes/plan.ts` — `POST /plan/generate` (SSE), `GET /plan`,
+  `POST /plan/starter`. A failed day retries once after a 1.5 s pause (seven
+  parallel calls make provider overload the likeliest transient failure, and an
+  instant retry would meet the same overload). A day that still fails is named in
+  a `partial` event and **nothing is stored** — a week with an empty day cannot
+  be followed, and the starter plan is one tap away.
+- Not verified: the P95 < 45 s budget needs a real provider and a deployed
+  Lambda. Measure it on the first prod generation.
 
 ### E2.2 — Plan activation transaction (M) ← review blocker #1
 
@@ -234,6 +244,9 @@ nothing is worse than no button.
   delete old plan's `GROCSTATE#` and `OFFERS#` items.
 - AC: **regenerate ⇒ grocery checked/store state and offers cache are fresh**
   (automated test).
+- Done in E0.6 as `store.activatePlan`; both E2.1 routes go through it, and
+  `plan.test.ts` asserts an adopted starter plan clears the previous plan's
+  checked boxes.
 
 ### E2.3 — Plan gate UI (M)
 

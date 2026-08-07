@@ -20,8 +20,9 @@ declare module 'sst' {
     Data: { type: 'sst.aws.Dynamo'; name: string };
     Api: { type: 'sst.aws.Function'; url: string };
     Users: { type: 'sst.aws.CognitoUserPool'; id: string };
+    /** The Cognito app client. The static site is `Site`, so the names differ. */
     Web: { type: 'sst.aws.CognitoUserPoolClient'; id: string };
-    Web: { type: 'sst.aws.StaticSite'; url: string };
+    Site: { type: 'sst.aws.StaticSite'; url: string };
   }
 }
 

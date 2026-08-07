@@ -70,6 +70,30 @@ function build(provider: ProviderId, model: string, env: ProviderEnv): AiProvide
   }
 }
 
+/**
+ * Defer construction until the first call.
+ *
+ * `build` throws on a missing key or an unknown provider id, which is the right
+ * behaviour — but not at container start: /health is the first thing you check
+ * when a stage looks wrong, and it has to answer even when the AI configuration
+ * is what's wrong. This way a bad key fails the routes that generate, and
+ * nothing else.
+ */
+export function lazyProvider(build: () => AiProvider): AiProvider {
+  let cached: AiProvider | undefined;
+  const resolve = (): AiProvider => (cached ??= build());
+  return {
+    get name() {
+      return resolve().name;
+    },
+    get model() {
+      return resolve().model;
+    },
+    generateDay: (config) => resolve().generateDay(config),
+    scanOffers: (request) => resolve().scanOffers(request),
+  };
+}
+
 /** The provider used to generate plans. */
 export function generationProvider(env: ProviderEnv): AiProvider {
   const id = parseProviderId(env.AI_PROVIDER, 'anthropic');

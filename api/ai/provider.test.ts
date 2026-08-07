@@ -8,6 +8,7 @@ import {
   canScanOffers,
   defaultModelFor,
   generationProvider,
+  lazyProvider,
   offerProvider,
   parseProviderId,
 } from './provider';
@@ -238,5 +239,28 @@ describe('provider selection', () => {
 
   it('reports Bedrock as unimplemented rather than failing in production', () => {
     expect(() => generationProvider({ AI_PROVIDER: 'bedrock' })).toThrow(/not implemented yet/);
+  });
+});
+
+describe('lazyProvider', () => {
+  it('does not build the provider until something needs it', () => {
+    // A missing key must not take the whole API down at container start: /health
+    // is how you find out the AI configuration is the broken part.
+    const build = vi.fn(() => generationProvider({ AI_PROVIDER: 'anthropic' }));
+    const provider = lazyProvider(build);
+    expect(build).not.toHaveBeenCalled();
+    expect(() => provider.name).toThrow(/ANTHROPIC_API_KEY/);
+  });
+
+  it('builds once and reuses it', () => {
+    const build = vi.fn(() =>
+      generationProvider({ AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'sk-a' }),
+    );
+    const provider = lazyProvider(build);
+    expect(provider.name).toBe('anthropic');
+    expect(provider.model).toBe(defaultModelFor('anthropic'));
+    // The Anthropic client holds a connection pool; rebuilding it per call would
+    // throw that away on every request.
+    expect(build).toHaveBeenCalledTimes(1);
   });
 });

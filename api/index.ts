@@ -2,16 +2,18 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { handle, streamHandle } from 'hono/aws-lambda';
 import { Resource } from 'sst';
+import { generationProvider, lazyProvider } from './ai/provider';
 import { CognitoTokenVerifier } from './auth/verifier';
 import { DynamoStore } from './db/dynamo-store';
 import { ValidatingStore } from './db/validating-store';
+import { planRoutes } from './routes/plan';
 import { profileRoutes } from './routes/profile';
 
 /**
  * The API: one Hono app on one Lambda behind a Function URL.
  *
- * Remaining routes arrive with their stories — plan generation in E2.1, the offer
- * scan in E4.3, export and deletion in E5.3.
+ * Remaining routes arrive with their stories — the offer scan in E4.3, export
+ * and deletion in E5.3.
  */
 const app = new Hono();
 
@@ -25,8 +27,20 @@ app.use('*', cors());
 function buildDeps() {
   const store = new ValidatingStore(new DynamoStore(Resource.Data.name));
   const verifier = new CognitoTokenVerifier(Resource.Users.id, Resource.Web.id);
-  return { store, verifier };
+  // The keys are read inside the factory, not here, so they are only touched by
+  // the routes that need them (see lazyProvider).
+  const provider = lazyProvider(() =>
+    generationProvider({
+      AI_PROVIDER: process.env['AI_PROVIDER'],
+      AI_MODEL: process.env['AI_MODEL'],
+      ANTHROPIC_API_KEY: Resource.AnthropicApiKey.value,
+      OPENAI_API_KEY: Resource.OpenaiApiKey.value,
+    }),
+  );
+  return { store, verifier, provider };
 }
+
+const deps = buildDeps();
 
 /** Liveness only — deliberately says nothing about the database or provider. */
 app.get('/health', (c) =>
@@ -39,7 +53,8 @@ app.get('/health', (c) =>
   }),
 );
 
-app.route('/', profileRoutes(buildDeps()));
+app.route('/', profileRoutes(deps));
+app.route('/', planRoutes(deps));
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

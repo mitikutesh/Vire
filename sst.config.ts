@@ -110,7 +110,10 @@ export default $config({
        Static assets on S3 behind CloudFront. The API base URL is injected at
        build time so the same bundle can be pointed at any stage — and so the
        Capacitor build can point at prod. */
-    const web = new sst.aws.StaticSite('Web', {
+    // Named `Site`, not `Web`: `Web` is already the Cognito app client above, and
+    // linked resource names share one namespace — two components called `Web`
+    // collide, and the API reads the client id as `Resource.Web.id`.
+    const web = new sst.aws.StaticSite('Site', {
       build: { command: 'npm run build', output: 'dist' },
       environment: {
         VITE_API_BASE_URL: api.url,
