@@ -155,6 +155,25 @@ export const t = {
     regenerateConfirm: 'Tap again to confirm',
     regenerateWarning: "This replaces the current week's meals and grocery list.",
 
+    // I6: the data is the user's, in both directions.
+    dataSection: 'Your data',
+    exportBlurb: 'Download everything Vire holds about you as a single JSON file.',
+    exportAction: 'Export my data',
+    exportFilename: 'vire-export.json',
+    exportFailed: 'Couldn’t build the export. Try again in a moment.',
+    deleteAction: 'Delete my account',
+    deleteWarning:
+      'This deletes your profile, plan, every logged day and every weigh-in, and closes your account. It cannot be undone.',
+    deleteConfirmLabel: (word: string) => `Type ${word} to confirm`,
+    deleteConfirmWord: 'DELETE',
+    deleteConfirmAction: 'Delete everything',
+    deleteCancel: 'Keep my account',
+    deleteFailed: 'Couldn’t delete the account. Nothing was removed — try again.',
+    // The half-done case: the data really is gone, so the copy must not claim
+    // otherwise. Retrying finishes closing the account.
+    deletePartial:
+      'Your data has been deleted, but closing the account didn’t finish. Tap again to complete it.',
+
     signOut: 'Sign out',
 
     // Health guardrail 2 — must survive any rewrite (PLAN §7).

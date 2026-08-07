@@ -163,6 +163,37 @@ PK = USER#<cognito sub>
 - Static content (STARTER plan, EX rotation, QUICK_EX, slot metadata,
   kcal-budget ratios) stays in code — versioned product content.
 
+### 4a. Export format (I6, implemented in E5.3)
+
+`GET /export` returns the whole partition as one document:
+
+```json
+{
+  "v": 1,
+  "exportedAt": "2026-08-08T10:00:00.000Z",
+  "items": [
+    { "sk": "PROFILE", "name": "…", "target": 1600 },
+    { "sk": "LOG#2026-08-07", "…": "…" }
+  ]
+}
+```
+
+Deliberate choices:
+
+- **Raw items, not a curated shape.** The point of an export is that nothing is
+  withheld; a hand-picked subset is a promise that quietly rots as item types are
+  added. Each item's `sk` says what it is, and the table above is its schema.
+- **No `pk`.** It embeds the Cognito subject, which identifies the account rather
+  than describing the user.
+- `v` is what a future importer keys off. Import itself is not built (the story
+  lists it as optional); the format is stable enough to write one against.
+
+Deletion is the same partition in reverse — `deleteAll` then the Cognito user, in
+that order, because the opposite can strand items under a subject that can never
+sign in again. A failure between the two returns `account_not_closed` rather than a
+generic error, since by then the data really is gone and saying otherwise would be
+a lie.
+
 ## 5. Shim → production mapping (complete)
 
 | #   | Prototype shim                                                | Production implementation                                                                                                                                                                                                                                         | Milestone |

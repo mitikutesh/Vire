@@ -9,6 +9,7 @@ import { calcTarget } from '@/domain/target';
 import { Dialog } from '@/ui/Dialog';
 import { NumberField, SelectField, TextField } from '@/ui/Field';
 import { WeighInSection } from '@/weight/WeighInSection';
+import { DataSection } from './DataSection';
 
 /**
  * Profile setup and settings — the same form in two modes.
@@ -261,6 +262,8 @@ export function SettingsView({
         {busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : null}
         {firstRun ? t.settings.saveFirstRun : t.settings.save}
       </button>
+
+      {onClose ? <DataSection api={api} onDeleted={onSignOut} /> : null}
 
       <button
         type="button"

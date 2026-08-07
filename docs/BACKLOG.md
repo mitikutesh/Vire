@@ -2,8 +2,8 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0 through M4 are complete.** 591 unit tests and an end-to-end test in
-real WebKit that walks sign-up, the profile form
+**Milestones M0 through M4 are complete**, plus E5.3 from M5. 616 unit tests and an
+end-to-end test in real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing
 has run against AWS yet — see the owner actions below.
@@ -493,6 +493,14 @@ nothing is worse than no button.
 
 ### E5.1 — Installable PWA + offline (L)
 
+> **Blocked on one owner input:** app icons. A PWA needs real icon assets
+> (192 px, 512 px, and an iOS `apple-touch-icon`), and the brand is a wordmark
+> rather than a mark — CLAUDE.md explicitly rules out a filled logo circle, so
+> there is no existing shape to render at 192 px. Either supply icons or approve a
+> specific treatment of the cloudberry "Vire" wordmark on paper. Everything else in
+> this story is unblocked; the offline outbox in particular should be verified with
+> a Playwright offline-mode test rather than by hand.
+
 - AC: manifest + service worker; installable on iOS home screen; shell +
   active plan + today's log cached; airplane-mode relaunch shows Now/Today.
 - AC: log writes queue in an IndexedDB outbox flushed on reconnect/visibility
@@ -519,6 +527,20 @@ Per PLAN §5a.
   DynamoDB items + the Cognito user, signs out.
 - AC (optional pull-in): JSON import matching the export format; legacy
   artifact data is NOT migrated (decision PLAN §2).
+- Done: `api/routes/account.ts`, `src/settings/DataSection.tsx`. Format documented
+  in PLAN §4a. Import was **not** pulled in — it was optional, and an importer is
+  only worth writing once there is a second Vire to import into.
+- Deletion order is data first, then the account. The opposite can strand items
+  under a subject that can never sign in again: data nobody can reach and nobody
+  can remove, which is the worst possible outcome for a deletion request. This
+  order fails the recoverable way.
+- A test drove that failure and caught a copy bug: the client said "Nothing was
+  removed" when in fact the data was already gone. The route now returns
+  `account_not_closed` for the half-done case and the UI says so, since
+  `deleteUser` is idempotent and retrying finishes the job.
+- Cognito deletion sits behind an `IdentityAdmin` port with an in-memory fake, so
+  the ordering and confirmation logic is testable with no AWS account. The API
+  Lambda gets exactly one new IAM action, scoped to this user pool.
 
 ### E5.4 — Polish pass (M)
 

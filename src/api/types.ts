@@ -84,6 +84,21 @@ export interface VireApi {
    */
   scanOffers(planId: string): Promise<OfferScan>;
 
+  /**
+   * Everything the account holds, as one JSON document (I6).
+   *
+   * Returned as an opaque value on purpose: the point of the export is that
+   * nothing is withheld, and typing it as a curated shape here would invite
+   * filtering it.
+   */
+  exportData(): Promise<unknown>;
+
+  /**
+   * Delete every stored item and the account itself. Irreversible, which is why
+   * the confirmation the user typed is sent for the server to check too.
+   */
+  deleteAccount(confirm: string): Promise<void>;
+
   /** The recent days, newest first, for the adherence summary (I3). */
   listLogs(): Promise<DatedLog[]>;
 

@@ -97,6 +97,14 @@ export default $config({
       url: { cors: true },
       streaming: true,
       link: [table, anthropicApiKey, openaiApiKey, userPool, userPoolClient],
+      // Account deletion (I6) closes the Cognito user as well as its data. Scoped
+      // to this pool and to that one action: nothing else here administers users.
+      permissions: [
+        {
+          actions: ['cognito-idp:AdminDeleteUser'],
+          resources: [userPool.nodes.userPool.arn],
+        },
+      ],
       environment: {
         VIRE_STAGE: $app.stage,
         // Provider and model are configuration, not code: switching is an env

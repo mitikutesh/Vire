@@ -3,9 +3,11 @@ import { cors } from 'hono/cors';
 import { handle, streamHandle } from 'hono/aws-lambda';
 import { Resource } from 'sst';
 import { generationProvider, lazyProvider, offerProvider } from './ai/provider';
+import { CognitoIdentityAdmin } from './auth/identity-admin';
 import { CognitoTokenVerifier } from './auth/verifier';
 import { DynamoStore } from './db/dynamo-store';
 import { ValidatingStore } from './db/validating-store';
+import { accountRoutes } from './routes/account';
 import { grocRoutes } from './routes/groc';
 import { logRoutes } from './routes/log';
 import { offerRoutes } from './routes/offers';
@@ -16,8 +18,7 @@ import { weightRoutes } from './routes/weight';
 /**
  * The API: one Hono app on one Lambda behind a Function URL.
  *
- * Remaining routes arrive with their stories — the offer scan in E4.3, export and
- * deletion in E5.3.
+ * Push subscriptions are the one route still to come (E5.2).
  */
 const app = new Hono();
 
@@ -78,6 +79,7 @@ app.route('/', logRoutes(deps));
 app.route('/', weightRoutes(deps));
 app.route('/', grocRoutes(deps));
 app.route('/', offerRoutes({ ...deps, provider: offerProviderLazy }));
+app.route('/', accountRoutes({ ...deps, identity: new CognitoIdentityAdmin(Resource.Users.id) }));
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

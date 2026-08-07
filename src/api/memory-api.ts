@@ -143,6 +143,29 @@ export class MemoryVireApi implements VireApi {
     return structuredClone(scan);
   }
 
+  async exportData(): Promise<unknown> {
+    return {
+      v: 1,
+      exportedAt: new Date().toISOString(),
+      items: [
+        ...(this.profile ? [{ sk: 'PROFILE', ...this.profile }] : []),
+        ...(this.plan ? [{ sk: 'PLAN#ACTIVE', ...this.plan }] : []),
+        ...[...this.logs.entries()].map(([date, log]) => ({ sk: `LOG#${date}`, ...log })),
+        ...[...this.weights.entries()].map(([date, kg]) => ({ sk: `WEIGHT#${date}`, kg })),
+      ],
+    };
+  }
+
+  async deleteAccount(confirm: string): Promise<void> {
+    if (confirm.trim().toUpperCase() !== 'DELETE') throw new ApiError(400, 'confirmation_required');
+    this.profile = null;
+    this.plan = null;
+    this.logs.clear();
+    this.weights.clear();
+    this.grocStates.clear();
+    this.offers.clear();
+  }
+
   async listLogs(): Promise<DatedLog[]> {
     return [...this.logs.entries()]
       .map(([date, log]) => ({ ...structuredClone(log), date }))

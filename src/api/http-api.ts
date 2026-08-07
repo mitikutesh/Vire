@@ -142,6 +142,20 @@ export class HttpVireApi implements VireApi {
     return (await response.json()) as OfferScan;
   }
 
+  async exportData(): Promise<unknown> {
+    const response = await this.request('/export');
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as unknown;
+  }
+
+  async deleteAccount(confirm: string): Promise<void> {
+    const response = await this.request('/account/delete', {
+      method: 'POST',
+      body: JSON.stringify({ confirm }),
+    });
+    if (!response.ok) return HttpVireApi.fail(response);
+  }
+
   async listLogs(): Promise<DatedLog[]> {
     const response = await this.request('/logs');
     if (!response.ok) return HttpVireApi.fail(response);
