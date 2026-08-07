@@ -19,15 +19,14 @@ import { useClock } from '@/hooks/useClock';
 import { GROC_CATS } from '@/domain/constants';
 import type { Profile, SlotKey, StoredPlan, Swap } from '@/domain/schema';
 import { SLOTS } from '@/content/plan';
-import { DAY_NAMES, SLOT_LABEL, t } from '@/content/strings';
+import { t } from '@/content/strings';
+import { NowView } from '@/now/NowView';
 import { PlanGate } from '@/plan/PlanGate';
 import { WeekView } from '@/week/WeekView';
-import { dateKey, getSlotKey, hourOf, weekdayIdx } from '@/domain/clock';
+import { dateKey, weekdayIdx } from '@/domain/clock';
 import { burnedKcal, eatenKcal, remainingKcal } from '@/domain/log';
 import { AppShell } from '@/ui/AppShell';
-import { DayStrip } from '@/ui/DayStrip';
 import { MealCard } from '@/ui/MealCard';
-import { Ring } from '@/ui/Ring';
 import { Toast } from '@/ui/Toast';
 import type { Tab } from '@/ui/BottomNav';
 import { SettingsView } from '@/settings/SettingsView';
@@ -204,8 +203,6 @@ function FixtureShell({
 
   const wd = weekdayIdx(now);
   const day = plan.days[wd];
-  const nowHour = hourOf(now);
-  const nowSlot = getSlotKey(nowHour);
 
   const toggleSlot = (slot: SlotKey) =>
     update((prev) => ({ ...prev, m: { ...prev.m, [slot]: !prev.m[slot] } }));
@@ -227,40 +224,13 @@ function FixtureShell({
       ) : null}
 
       {tab === 'now' ? (
-        <section className="flex flex-col gap-4">
-          <div>
-            <p className="text-sub text-sm">
-              {DAY_NAMES[wd]} {now.getDate()}.{now.getMonth() + 1}.
-            </p>
-            <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
-              {nowSlot === 'night' ? t.now.nightTitle : t.now.rightNow(SLOT_LABEL[nowSlot].label)}
-            </h1>
-          </div>
-
-          <DayStrip nowHour={nowHour} log={log} />
-
-          {nowSlot === 'night' ? null : (
-            <MealCard
-              slot={nowSlot}
-              meal={day[nowSlot]}
-              entry={log.m[nowSlot]}
-              onToggle={() => toggleSlot(nowSlot)}
-              onLogSwap={(swap) => logSwap(nowSlot, swap)}
-              onClearSwap={() => clearSwap(nowSlot)}
-              defaultOpen
-            />
-          )}
-
-          <div className="border-line bg-card flex items-center gap-4 rounded-2xl border p-4">
-            <Ring
-              pct={eaten / profile.target}
-              over={remaining < 0}
-              label={remaining < 0 ? `+${Math.abs(remaining)}` : String(remaining)}
-              sub={remaining < 0 ? t.now.kcalOver : t.now.kcalLeft}
-            />
-            <p className="text-sub text-xs">{t.now.ofTarget(profile.target)}</p>
-          </div>
-        </section>
+        <NowView
+          profile={profile}
+          plan={plan}
+          log={logHandle}
+          now={now}
+          onGoToday={() => setTab('today')}
+        />
       ) : null}
 
       {tab === 'today' ? (

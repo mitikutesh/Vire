@@ -247,6 +247,10 @@ export const t = {
     kcalOver: 'over',
     ofTarget: (target: number) => `of ${target}`,
     waterTile: 'tap to drink',
+    // The tile stacks an icon, "3/8" and a hint; a screen reader should hear one
+    // sentence rather than assemble those three.
+    waterAria: (glasses: number, goal: number) =>
+      `Water: ${glasses} of ${goal} glasses. Tap to add one.`,
     exerciseDone: 'done ✓',
     exerciseMinutes: (min: number) => `${min} min`,
   },
