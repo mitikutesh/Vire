@@ -2,8 +2,8 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0 through M3 are complete**, plus the first story of M4. 548 unit
-tests and an end-to-end test in real WebKit that walks sign-up, the profile form
+**Milestones M0 through M3 are complete**, plus two stories of M4. 553 unit tests
+and an end-to-end test in real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing
 has run against AWS yet — see the owner actions below.
@@ -438,6 +438,14 @@ nothing is worse than no button.
 - AC: city selector (5 options) writes back to the profile; Maps chips per
   chain in chain brand colors; three chain deals links.
 - Parity: Shop (area card).
+- Done: `src/shop/AreaCard.tsx`. The city writes through `saveProfile` like any
+  other profile edit rather than by a shortcut route, so the server still recomputes
+  the target — the city does not affect it, but a second write path that skipped
+  that step would be a second place for the guardrail to be forgotten.
+- The chain deals links matter more than they look: guardrail 5 calls the offer
+  scan best-effort and tells the user to verify, and these are what verifying
+  means. Their URLs are asserted against `CHAIN_DEALS`, and every outbound link is
+  `noreferrer noopener`.
 
 ### E4.3 — Offer scan server-side (L)
 

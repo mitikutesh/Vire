@@ -15,6 +15,7 @@ import {
   useProfile,
   usePlanWriter,
   useProfileWriter,
+  useCityWriter,
   useWeights,
 } from '@/data/useVireData';
 import type { DailyLogHandle } from '@/data/useVireData';
@@ -114,6 +115,10 @@ function SignedInApp({
 
   const setProfile = useProfileWriter();
   const setPlan = usePlanWriter();
+  // The Shop tab's city selector writes straight back to the profile: the offer
+  // scan reads the same field, and two places to say where you live is two places
+  // to disagree.
+  const saveCity = useCityWriter(api, profile);
 
   // Read alongside the plan: the weekly weigh-in prompt needs to know how long it
   // has been, so it cannot wait for the Week tab to be opened.
@@ -170,6 +175,8 @@ function SignedInApp({
         weights={weights}
         logs={logs}
         api={api}
+        onCityChange={(city) => saveCity.mutate(city)}
+        savingCity={saveCity.isPending}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       {settingsOpen ? (
@@ -208,6 +215,8 @@ function Shell({
   weights,
   logs,
   api,
+  onCityChange,
+  savingCity,
   onOpenSettings,
 }: {
   profile: Profile;
@@ -217,6 +226,8 @@ function Shell({
   weights: readonly DatedWeight[];
   logs: readonly DatedLog[];
   api: VireApi;
+  onCityChange: (city: string) => void;
+  savingCity: boolean;
   onOpenSettings: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('now');
@@ -284,7 +295,15 @@ function Shell({
         />
       ) : null}
 
-      {tab === 'shop' ? <ShopView plan={plan} groc={groc} /> : null}
+      {tab === 'shop' ? (
+        <ShopView
+          plan={plan}
+          groc={groc}
+          city={profile.city}
+          onCityChange={onCityChange}
+          savingCity={savingCity}
+        />
+      ) : null}
     </AppShell>
   );
 }

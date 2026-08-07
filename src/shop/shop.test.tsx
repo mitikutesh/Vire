@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { GrocStateHandle } from '@/data/useVireData';
 import { starterPlan } from '@/content/starter-plan';
 import { t } from '@/content/strings';
+import { CITIES } from '@/content/plan';
 import { GROC_CATS } from '@/domain/constants';
 import { emptyGrocState } from '@/domain/groc-state';
-import { kLink, sLink } from '@/domain/links';
+import { CHAIN_DEALS, CHAIN_STORES, kLink, mapsLink, sLink } from '@/domain/links';
 import type { GrocState, StoredPlan } from '@/domain/schema';
 import { ShopView } from './ShopView';
 
@@ -16,8 +17,9 @@ const FIRST = PLAN.groc[0]!;
 const SECOND = PLAN.groc[1]!;
 
 /** The harness owns the state, so a tap flows through `update` and back. */
-function Harness({ state }: { state: GrocState }) {
+function Harness({ state, onCityChange }: { state: GrocState; onCityChange: (c: string) => void }) {
   const [groc, setGroc] = useState(state);
+  const [city, setCity] = useState('Helsinki');
   const handle: GrocStateHandle = {
     value: groc,
     groc,
@@ -26,12 +28,23 @@ function Harness({ state }: { state: GrocState }) {
     saveFailed: false,
     dismissSaveError: () => {},
   };
-  return <ShopView plan={PLAN} groc={handle} />;
+  return (
+    <ShopView
+      plan={PLAN}
+      groc={handle}
+      city={city}
+      onCityChange={(next) => {
+        setCity(next);
+        onCityChange(next);
+      }}
+    />
+  );
 }
 
 function setup(state: GrocState = emptyGrocState()) {
-  render(<Harness state={state} />);
-  return { user: userEvent.setup() };
+  const onCityChange = vi.fn();
+  render(<Harness state={state} onCityChange={onCityChange} />);
+  return { user: userEvent.setup(), onCityChange };
 }
 
 const rowFor = (name: string) => screen.getByText(new RegExp(name)).closest('li')!;
@@ -193,5 +206,62 @@ describe('filters', () => {
     const { user } = setup({ checked: { [FIRST.id]: true }, store: { [FIRST.id]: 'S' } });
     await user.click(filterButton(t.shop.filterFor('S', 1)));
     expect(screen.getByText(t.shop.basket(1, PLAN.groc.length))).toBeInTheDocument();
+  });
+});
+
+describe('the area card (E4.2)', () => {
+  it('offers the five covered cities', () => {
+    setup();
+    const select = screen.getByLabelText(t.shop.areaLabel);
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([...CITIES]);
+  });
+
+  it('writes a change back to the profile', async () => {
+    // The offer scan reads the same field, so two copies would be two places to
+    // disagree.
+    const { user, onCityChange } = setup();
+    await user.selectOptions(screen.getByLabelText(t.shop.areaLabel), 'Espoo');
+    expect(onCityChange).toHaveBeenCalledWith('Espoo');
+  });
+
+  it('points the map chips at the chosen city', async () => {
+    const { user } = setup();
+    await user.selectOptions(screen.getByLabelText(t.shop.areaLabel), 'Vantaa');
+
+    for (const store of CHAIN_STORES) {
+      expect(
+        screen.getByRole('link', { name: t.shop.nearCity(store.name, 'Vantaa') }),
+      ).toHaveAttribute('href', mapsLink(store.name, 'Vantaa'));
+    }
+  });
+
+  it('links the three chains’ own offer pages', () => {
+    // Guardrail 5: these are the authority the AI scan defers to, which is what
+    // "verify with the price links" means in practice.
+    setup();
+    expect(screen.getByRole('link', { name: t.shop.dealsS })).toHaveAttribute(
+      'href',
+      CHAIN_DEALS.S,
+    );
+    expect(screen.getByRole('link', { name: t.shop.dealsK })).toHaveAttribute(
+      'href',
+      CHAIN_DEALS.K,
+    );
+    expect(screen.getByRole('link', { name: t.shop.dealsL })).toHaveAttribute(
+      'href',
+      CHAIN_DEALS.L,
+    );
+  });
+
+  it('opens outbound links safely in a new tab', () => {
+    // `noreferrer` as well as `noopener`: these are third-party pages.
+    setup();
+    const link = screen.getByRole('link', { name: t.shop.dealsS });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'));
   });
 });

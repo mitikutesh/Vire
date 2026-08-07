@@ -130,6 +130,7 @@ interface SelectFieldProps<T extends string | number> {
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
   hint?: string;
+  disabled?: boolean;
 }
 
 export function SelectField<T extends string | number>({
@@ -138,14 +139,16 @@ export function SelectField<T extends string | number>({
   options,
   onChange,
   hint,
+  disabled = false,
 }: SelectFieldProps<T>) {
   return (
     <Field label={label} hint={hint}>
       {({ id, className }) => (
         <select
           id={id}
-          className={`${className} w-full`}
+          className={`${className} w-full disabled:opacity-60`}
           value={value}
+          disabled={disabled}
           onChange={(e) => {
             const picked = options.find((o) => String(o.value) === e.target.value);
             if (picked) onChange(picked.value);

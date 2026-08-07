@@ -219,6 +219,28 @@ export function useProfileWriter() {
   return (profile: Profile) => queryClient.setQueryData(queryKeys.profile, profile);
 }
 
+/**
+ * Change just the city, from the Shop tab (E4.2).
+ *
+ * Goes through `saveProfile` like any other profile edit, so the server recomputes
+ * the target and the floors apply — the city does not affect it, but a second
+ * write path that skipped that would be a second place for the guardrail to be
+ * forgotten. A null profile makes this a no-op rather than a crash: the Shop tab
+ * cannot render without one.
+ */
+export function useCityWriter(api: VireApi, profile: Profile | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (city: string) => {
+      if (!profile) throw new Error('No profile to change the city on');
+      const { target: _target, ...input } = { ...profile, city };
+      return api.saveProfile(input);
+    },
+    onSuccess: (saved) => queryClient.setQueryData(queryKeys.profile, saved),
+    onError: (error) => console.error('[vire] Changing the city failed', error),
+  });
+}
+
 /** Write a freshly activated plan straight into the cache. */
 export function usePlanWriter() {
   const queryClient = useQueryClient();

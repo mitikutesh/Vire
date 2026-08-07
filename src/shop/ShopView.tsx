@@ -6,6 +6,7 @@ import { GROC_CATS, STORE_TAGS } from '@/domain/constants';
 import type { StoreTag } from '@/domain/constants';
 import { kLink, sLink } from '@/domain/links';
 import type { GrocItem, StoredPlan } from '@/domain/schema';
+import { AreaCard } from './AreaCard';
 
 /**
  * The Shop tab: the week's list, organised for a single trip.
@@ -26,7 +27,20 @@ const NEXT_TAG: Record<string, StoreTag | undefined> = {
 
 type Filter = 'all' | StoreTag;
 
-export function ShopView({ plan, groc: grocHandle }: { plan: StoredPlan; groc: GrocStateHandle }) {
+export function ShopView({
+  plan,
+  groc: grocHandle,
+  city,
+  onCityChange,
+  savingCity = false,
+}: {
+  plan: StoredPlan;
+  groc: GrocStateHandle;
+  city: string;
+  /** Writes back to the profile — the offer scan reads the same field (E4.3). */
+  onCityChange: (city: string) => void;
+  savingCity?: boolean;
+}) {
   const { groc, update } = grocHandle;
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -62,6 +76,8 @@ export function ShopView({ plan, groc: grocHandle }: { plan: StoredPlan; groc: G
           {t.shop.title}
         </h1>
       </div>
+
+      <AreaCard city={city} onCityChange={onCityChange} saving={savingCity} />
 
       <div className="border-line bg-card flex flex-col gap-2 rounded-2xl border p-4">
         <div className="flex items-center justify-between gap-2">
