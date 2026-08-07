@@ -29,8 +29,8 @@ export default tseslint.config(
     },
   },
   {
-    // Config files run in Node, not the browser.
-    files: ['*.config.{ts,js}'],
+    // The API and the config files run in Node, not the browser.
+    files: ['api/**/*.ts', '*.config.{ts,js}'],
     languageOptions: { globals: globals.node },
   },
 );

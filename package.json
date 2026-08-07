@@ -29,6 +29,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1106.0",
+    "@aws-sdk/lib-dynamodb": "^3.1106.0",
     "@eslint/js": "^9.17.0",
     "@playwright/test": "^1.49.1",
     "@tailwindcss/vite": "^4.1.0",
