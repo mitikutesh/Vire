@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { starterPlan } from '@/content/starter-plan';
 import { SLOTS } from '@/content/plan';
 import { DAY_NAMES, t } from '@/content/strings';
+import type { DatedWeight } from '@/api/types';
 import type { WeekdayIndex } from '@/domain/constants';
 import type { StoredPlan } from '@/domain/schema';
 import { WeekView } from './WeekView';
@@ -13,8 +14,16 @@ const PLAN: StoredPlan = { ...starterPlan(1_700_000_000_000), planId: 'plan-1' }
 /** Wednesday, so "today" is neither the first nor the last row. */
 const WEDNESDAY: WeekdayIndex = 2;
 
-function setup(options: { plan?: StoredPlan; today?: WeekdayIndex } = {}) {
-  render(<WeekView plan={options.plan ?? PLAN} today={options.today ?? WEDNESDAY} />);
+function setup(options: { plan?: StoredPlan; today?: WeekdayIndex; weights?: DatedWeight[] } = {}) {
+  render(
+    <WeekView
+      plan={options.plan ?? PLAN}
+      today={options.today ?? WEDNESDAY}
+      weights={options.weights ?? []}
+      currentWeight={80}
+      goalWeight={72}
+    />,
+  );
   return { user: userEvent.setup() };
 }
 

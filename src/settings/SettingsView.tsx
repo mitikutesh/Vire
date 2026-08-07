@@ -8,6 +8,7 @@ import type { Profile } from '@/domain/schema';
 import { calcTarget } from '@/domain/target';
 import { Dialog } from '@/ui/Dialog';
 import { NumberField, SelectField, TextField } from '@/ui/Field';
+import { WeighInSection } from '@/weight/WeighInSection';
 
 /**
  * Profile setup and settings — the same form in two modes.
@@ -46,6 +47,8 @@ interface SettingsViewProps {
   onClose?: () => void;
   /** Absent on first run, when there is no plan to replace. */
   onRegenerate?: (() => void) | undefined;
+  /** Absent on first run: a weigh-in needs a profile to recompute against. */
+  today?: Date | undefined;
   onSignOut: () => void;
 }
 
@@ -55,6 +58,7 @@ export function SettingsView({
   onSaved,
   onClose,
   onRegenerate,
+  today,
   onSignOut,
 }: SettingsViewProps) {
   const firstRun = profile === null;
@@ -212,6 +216,8 @@ export function SettingsView({
           <p className="text-sub mt-1 text-xs">{t.settings.onTheWay(form.w, form.goalW)}</p>
         ) : null}
       </section>
+
+      {profile && today ? <WeighInSection api={api} profile={profile} today={today} /> : null}
 
       {onRegenerate ? (
         <section className="border-line bg-card flex flex-col gap-3 rounded-2xl border p-4">

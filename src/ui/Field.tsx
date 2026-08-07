@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 
 /**
@@ -78,6 +78,46 @@ export function NumberField({ label, value, onChange, hint }: NumberFieldProps) 
             const next = Number.parseInt(e.target.value || '0', 10);
             onChange(Math.max(0, Number.isFinite(next) ? next : 0));
           }}
+        />
+      )}
+    </Field>
+  );
+}
+
+interface DecimalFieldProps extends NumberFieldProps {
+  step?: number;
+}
+
+/**
+ * A number field that keeps its decimals.
+ *
+ * `NumberField` parses with `parseInt`, which is right for age, height and a
+ * calorie count. A weigh-in is the one place a tenth matters — 78.4 is a week's
+ * progress, and rounding it away would make the trend line lie.
+ *
+ * The typed text is held as a string while editing, so a trailing "." or a
+ * half-typed "78." survives the keystroke instead of being parsed back to 78.
+ */
+export function DecimalField({ label, value, onChange, hint, step = 0.1 }: DecimalFieldProps) {
+  const [text, setText] = useState<string | null>(null);
+
+  return (
+    <Field label={label} hint={hint}>
+      {({ id, className }) => (
+        <input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          step={step}
+          className={className}
+          value={text ?? String(value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            const next = Number.parseFloat(e.target.value);
+            if (Number.isFinite(next) && next >= 0) onChange(next);
+          }}
+          // Once focus leaves, show the committed number rather than the draft.
+          onBlur={() => setText(null)}
         />
       )}
     </Field>

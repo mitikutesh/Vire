@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createVireApi } from '@/api/client';
-import type { VireApi } from '@/api/types';
+import type { DatedWeight, VireApi } from '@/api/types';
 import { AuthView } from '@/auth/AuthView';
 import { createAuthClient, googleSignInAvailable } from '@/auth/client';
 import { useAuthSession } from '@/auth/useAuthSession';
@@ -13,6 +13,7 @@ import {
   useProfile,
   usePlanWriter,
   useProfileWriter,
+  useWeights,
 } from '@/data/useVireData';
 import type { DailyLogHandle } from '@/data/useVireData';
 import { useClock } from '@/hooks/useClock';
@@ -23,6 +24,7 @@ import { NowView } from '@/now/NowView';
 import { TodayView } from '@/today/TodayView';
 import { PlanGate } from '@/plan/PlanGate';
 import { WeekView } from '@/week/WeekView';
+import { weighInDue } from '@/weight/weigh-in-due';
 import { dateKey, weekdayIdx } from '@/domain/clock';
 import { AppShell } from '@/ui/AppShell';
 import { Toast } from '@/ui/Toast';
@@ -111,6 +113,11 @@ function SignedInApp({
   const setProfile = useProfileWriter();
   const setPlan = usePlanWriter();
 
+  // Read alongside the plan: the weekly weigh-in prompt needs to know how long it
+  // has been, so it cannot wait for the Week tab to be opened.
+  const weightsQuery = useWeights(api, profile !== null);
+  const weights = weightsQuery.data ?? [];
+
   const now = useClock();
   // The client's own date. Midnight passing changes the key, and the new day's
   // log loads on its own.
@@ -156,6 +163,7 @@ function SignedInApp({
         plan={plan}
         log={log}
         now={now}
+        weights={weights}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       {settingsOpen ? (
@@ -167,6 +175,7 @@ function SignedInApp({
             setSettingsOpen(false);
           }}
           onClose={() => setSettingsOpen(false)}
+          today={now}
           onRegenerate={() => {
             setSettingsOpen(false);
             setReplacingPlan(true);
@@ -190,12 +199,14 @@ function Shell({
   plan,
   log: logHandle,
   now,
+  weights,
   onOpenSettings,
 }: {
   profile: Profile;
   plan: StoredPlan;
   log: DailyLogHandle;
   now: Date;
+  weights: readonly DatedWeight[];
   onOpenSettings: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('now');
@@ -213,6 +224,8 @@ function Shell({
           plan={plan}
           log={logHandle}
           now={now}
+          weighInDue={weighInDue(weights, now)}
+          onWeighIn={onOpenSettings}
           onGoToday={() => setTab('today')}
         />
       ) : null}
@@ -221,7 +234,15 @@ function Shell({
         <TodayView profile={profile} plan={plan} log={logHandle} now={now} />
       ) : null}
 
-      {tab === 'week' ? <WeekView plan={plan} today={wd} /> : null}
+      {tab === 'week' ? (
+        <WeekView
+          plan={plan}
+          today={wd}
+          weights={weights}
+          currentWeight={profile.w}
+          goalWeight={profile.goalW}
+        />
+      ) : null}
 
       {tab === 'shop' ? (
         <section className="flex flex-col gap-4">

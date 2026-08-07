@@ -191,6 +191,18 @@ describe('reads', () => {
     expect(weights.map((w) => w.date)).toEqual(['2026-07-31', '2026-08-07']);
   });
 
+  it('keeps the most recent weigh-ins when there are more than the limit', async () => {
+    // `limit` means "the newest N", which is what DynamoDB's descending query
+    // returns. Taking the oldest N instead would pin the trend to the first
+    // weeks of history and never move again.
+    const db = store();
+    for (const day of ['01', '02', '03', '04', '05']) {
+      await db.putWeight(alice, `2026-08-${day}`, { kg: 80 });
+    }
+    const weights = await db.listWeights(alice, 2);
+    expect(weights.map((w) => w.date)).toEqual(['2026-08-04', '2026-08-05']);
+  });
+
   it('replaces a same-day weigh-in rather than adding a second', async () => {
     const db = store();
     await db.putWeight(alice, '2026-08-07', { kg: 79 });

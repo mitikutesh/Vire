@@ -1,10 +1,16 @@
 import { WEEKDAYS, type WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import { dailyLogSchema, profileSchema } from '@/domain/schema';
+import { dailyLogSchema, profileSchema, weightEntrySchema } from '@/domain/schema';
 import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import { calcTarget } from '@/domain/target';
 import { starterPlan } from '@/content/starter-plan';
-import { ApiError, PlanGenerationError, type ProfileInput, type VireApi } from './types';
+import {
+  ApiError,
+  PlanGenerationError,
+  type DatedWeight,
+  type ProfileInput,
+  type VireApi,
+} from './types';
 
 /**
  * In-memory API, for tests and for `npm run dev` before a Lambda exists.
@@ -26,6 +32,7 @@ export class MemoryVireApi implements VireApi {
   private profile: Profile | null;
   private plan: StoredPlan | null = null;
   private readonly logs = new Map<string, DailyLog>();
+  private readonly weights = new Map<string, number>();
   private planCount = 0;
   private readonly failDays: readonly WeekdayIndex[];
 
@@ -94,6 +101,29 @@ export class MemoryVireApi implements VireApi {
     if (!parsed.success) throw new ApiError(422, 'invalid_log');
     this.logs.set(date, parsed.data);
     return structuredClone(parsed.data);
+  }
+
+  async listWeights(): Promise<DatedWeight[]> {
+    return [...this.weights.entries()]
+      .map(([date, kg]) => ({ date, kg }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async saveWeighIn(
+    date: string,
+    kg: number,
+    applyToProfile: boolean,
+  ): Promise<{ entry: DatedWeight; profile: Profile }> {
+    if (!weightEntrySchema.safeParse({ kg }).success) throw new ApiError(422, 'invalid_weight');
+    if (!this.profile) throw new ApiError(409, 'no_profile');
+
+    this.weights.set(date, kg);
+    if (applyToProfile) {
+      // Recomputed with the same `calcTarget` the route uses, floors included.
+      const updated = { ...this.profile, w: kg };
+      this.profile = { ...updated, target: calcTarget(updated) };
+    }
+    return { entry: { date, kg }, profile: structuredClone(this.profile) };
   }
 
   private activate(plan: Omit<StoredPlan, 'planId'>): StoredPlan {

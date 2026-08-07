@@ -2,7 +2,7 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0, M1 and M2 are complete**, plus the first three stories of M3. 455
+**Milestones M0, M1 and M2 are complete**, plus four of M3's five stories. 495
 unit tests and an end-to-end test in real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing
@@ -358,6 +358,23 @@ nothing is worse than no button.
 - AC: Week tab shows "current → goal" and a minimal trend — cloud line on
   card, ink text, no new colors; caption "Trend, not medical advice."
   (guardrail 6).
+- Done: `api/routes/weight.ts` plus `src/weight/` — the entry section in Settings,
+  the weekly prompt card on Now, and the trend on Week. The target is recomputed
+  **server-side** on accept, floors included, and a `target` in the request body is
+  ignored outright — the schema does not accept the field.
+- Refinement on the AC: the second question is asked only when the new weight
+  actually moves the target. Asking a question with one sensible answer is
+  friction, not care, so an unchanged target saves in one tap.
+- The trend plots weight on the y-axis, so a loss descends. My first version
+  inverted it to make "progress go up"; that reads backwards against every other
+  weight chart and the test now pins the conventional direction.
+- Found while writing this: `MemoryStore.listWeights` returned the **oldest**
+  `limit` entries where DynamoDB returns the newest. With more history than the
+  limit the two disagree completely, so the trend would have shown the first weeks
+  of history forever in dev and tests while production showed the last. Fixed, with
+  a store-contract test that fails against the old behaviour.
+- A new `DecimalField` was needed: `NumberField` parses with `parseInt`, and a
+  weigh-in is the one place a tenth of a kilo is the whole signal.
 
 ### E3.5 — I3: History (M)
 

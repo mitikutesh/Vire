@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { VireApi } from '@/api/types';
+import type { DatedWeight, VireApi } from '@/api/types';
 import { emptyLog } from '@/domain/log';
 import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import { queryKeys } from './query';
@@ -104,6 +104,48 @@ export function useDailyLog(api: VireApi, date: string): DailyLogHandle {
     saveFailed: mutation.isError,
     dismissSaveError: mutation.reset,
   };
+}
+
+/**
+ * Weigh-in history, oldest first (I1).
+ *
+ * Read on every session because the weekly prompt needs to know how long it has
+ * been — which is also why it is not gated behind opening the Week tab.
+ */
+export function useWeights(api: VireApi, enabled: boolean) {
+  return useQuery({ queryKey: queryKeys.weights, queryFn: () => api.listWeights(), enabled });
+}
+
+export interface WeighInResult {
+  entry: DatedWeight;
+  profile: Profile;
+}
+
+/**
+ * Record a weigh-in.
+ *
+ * Not optimistic, deliberately. Unlike a meal tick, this can move the calorie
+ * target — and showing a new target that then fails to save would be worse than a
+ * moment's wait. The profile the server returns is written into the cache, so the
+ * whole app picks up the new target at once.
+ */
+export function useWeighIn(api: VireApi) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      date,
+      kg,
+      applyToProfile,
+    }: {
+      date: string;
+      kg: number;
+      applyToProfile: boolean;
+    }) => api.saveWeighIn(date, kg, applyToProfile),
+    onSuccess: ({ profile }) => {
+      queryClient.setQueryData(queryKeys.profile, profile);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.weights });
+    },
+  });
 }
 
 /** Write a freshly saved profile straight into the cache. */

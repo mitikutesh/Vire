@@ -166,8 +166,13 @@ export const t = {
     weighInPrompt: 'Time for this week’s weigh-in?',
     weighInLabel: 'Weight today (kg)',
     weighInSave: 'Save weigh-in',
+    // Asked only when the new weight actually moves the target — otherwise the
+    // weigh-in saves in one tap.
+    weighInApplyPrompt: 'Your target would change. Should it?',
     weighInUpdateTarget: (n: number) => `Update my target to ${n} kcal`,
     weighInKeepTarget: 'Keep my current target',
+    weighInSaved: 'Weigh-in saved.',
+    weighInFailed: 'Couldn’t save that weigh-in. Try again in a moment.',
   },
 
   planGate: {
@@ -312,6 +317,9 @@ export const t = {
     weightCurrentToGoal: (current: number, goal: number) => `${current} kg → ${goal} kg`,
     weightTrendCaption: 'Trend, not medical advice.',
     weightTrendEmpty: 'Log a weigh-in to start the trend.',
+    // A line is a picture; this is the same information as a sentence.
+    weightTrendAria: (count: number, first: number, last: number) =>
+      `Weight trend over the last ${count} weigh-ins: ${first} kg to ${last} kg.`,
   },
 
   shop: {

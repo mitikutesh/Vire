@@ -5,6 +5,7 @@ import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import {
   ApiError,
   PlanGenerationError,
+  type DatedWeight,
   type FieldIssue,
   type PlanFailure,
   type ProfileInput,
@@ -111,6 +112,26 @@ export class HttpVireApi implements VireApi {
     });
     if (!response.ok) return HttpVireApi.fail(response);
     return (await response.json()) as DailyLog;
+  }
+
+  async listWeights(): Promise<DatedWeight[]> {
+    const response = await this.request('/weight');
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as DatedWeight[];
+  }
+
+  async saveWeighIn(
+    date: string,
+    kg: number,
+    applyToProfile: boolean,
+  ): Promise<{ entry: DatedWeight; profile: Profile }> {
+    const response = await this.request(`/weight/${date}`, {
+      method: 'PUT',
+      body: JSON.stringify({ kg, applyToProfile }),
+    });
+    if (!response.ok) return HttpVireApi.fail(response);
+    const body = (await response.json()) as { entry: { kg: number }; profile: Profile };
+    return { entry: { date, kg: body.entry.kg }, profile: body.profile };
   }
 
   async generatePlan(

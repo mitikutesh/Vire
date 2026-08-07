@@ -36,20 +36,24 @@ test('the built app boots, onboards, and renders the four-tab shell', async ({ p
   await expect(page.getByRole('heading', { name: 'No plan for this week yet' })).toBeVisible();
   await page.getByRole('button', { name: /built-in Finnish starter plan/ }).click();
 
-  // Now the shell itself: all four destinations, and real plan content.
+  // Now the shell itself: all four destinations, and real plan content. `exact`
+  // matters — the weigh-in prompt card also contains the word "week".
   for (const tab of ['Now', 'Today', 'Week', 'Shop']) {
-    await expect(page.getByRole('button', { name: tab })).toBeVisible();
+    await expect(page.getByRole('button', { name: tab, exact: true })).toBeVisible();
   }
+
+  // A brand-new account has never weighed in, so the prompt is showing (I1).
+  await expect(page.getByText(/Time for this week/)).toBeVisible();
   // The Week tab opens on today and expands another day on tap — the one bit of
   // real interaction in the shell so far.
-  await page.getByRole('button', { name: 'Week' }).click();
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible();
   const sunday = page.getByRole('button', { name: /Sunday/ });
   await expect(sunday).toHaveAttribute('aria-expanded', 'false');
   await sunday.click();
   await expect(sunday).toHaveAttribute('aria-expanded', 'true');
 
-  await page.getByRole('button', { name: 'Shop' }).click();
+  await page.getByRole('button', { name: 'Shop', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
 
   expect(crashes, 'the page threw during boot').toEqual([]);

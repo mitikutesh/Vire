@@ -3,7 +3,9 @@ import { ChevronDown } from 'lucide-react';
 import { EX, SLOTS } from '@/content/plan';
 import { DAY_NAMES, DAY_SHORT, SLOT_LABEL, t } from '@/content/strings';
 import type { WeekdayIndex } from '@/domain/constants';
+import type { DatedWeight } from '@/api/types';
 import type { DayPlan, StoredPlan } from '@/domain/schema';
+import { WeightTrend } from '@/weight/WeightTrend';
 
 /**
  * The Week tab: seven collapsible days.
@@ -17,7 +19,19 @@ import type { DayPlan, StoredPlan } from '@/domain/schema';
 
 const dayTotal = (day: DayPlan): number => SLOTS.reduce((sum, slot) => sum + day[slot].k, 0);
 
-export function WeekView({ plan, today }: { plan: StoredPlan; today: WeekdayIndex }) {
+export function WeekView({
+  plan,
+  today,
+  weights,
+  currentWeight,
+  goalWeight,
+}: {
+  plan: StoredPlan;
+  today: WeekdayIndex;
+  weights: readonly DatedWeight[];
+  currentWeight: number;
+  goalWeight: number;
+}) {
   // Not "no day open": a collapsed week would hide the thing the tab is for.
   const [open, setOpen] = useState<number>(today);
   const panelIdBase = useId();
@@ -32,6 +46,8 @@ export function WeekView({ plan, today }: { plan: StoredPlan; today: WeekdayInde
           {t.week.title}
         </h1>
       </div>
+
+      <WeightTrend entries={weights} current={currentWeight} goal={goalWeight} />
 
       <ul className="flex flex-col gap-2">
         {plan.days.map((day, i) => {

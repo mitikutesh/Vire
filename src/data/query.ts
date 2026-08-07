@@ -14,6 +14,7 @@ export const queryKeys = {
   profile: ['profile'] as const,
   plan: ['plan'] as const,
   log: (date: string) => ['log', date] as const,
+  weights: ['weights'] as const,
 };
 
 export function createQueryClient(): QueryClient {

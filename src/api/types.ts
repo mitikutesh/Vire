@@ -2,6 +2,12 @@ import type { WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
 import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 
+/** A weigh-in as stored, with the date it belongs to. */
+export interface DatedWeight {
+  date: string;
+  kg: number;
+}
+
 /** The profile without the target, which only the server may set. */
 export type ProfileInput = Omit<Profile, 'target'>;
 
@@ -53,6 +59,23 @@ export interface VireApi {
 
   /** Write the whole log for a date, returning it as the server parsed it. */
   saveLog(date: string, log: DailyLog): Promise<DailyLog>;
+
+  /** Weigh-in history, oldest first, so a trend line reads left to right (I1). */
+  listWeights(): Promise<DatedWeight[]>;
+
+  /**
+   * Record a weigh-in, and optionally let it move the calorie target.
+   *
+   * `applyToProfile` is explicit rather than defaulted: a target that changes
+   * without being asked is a target the user stops trusting. The new target is
+   * computed by the server either way — the client's preview is only a preview
+   * (PLAN §7, guardrail 1).
+   */
+  saveWeighIn(
+    date: string,
+    kg: number,
+    applyToProfile: boolean,
+  ): Promise<{ entry: DatedWeight; profile: Profile }>;
 }
 
 /** A field-level validation failure the form can attribute to an input. */

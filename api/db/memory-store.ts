@@ -103,9 +103,13 @@ export class MemoryStore implements VireStore {
   }
 
   async listWeights(userId: UserId, limit: number): Promise<DatedWeight[]> {
+    // Newest `limit` entries, then reversed for display. Taking the *oldest*
+    // `limit` would agree with DynamoDB only while the history is shorter than
+    // the limit — and then silently show the wrong end of it forever.
     return this.collect<WeightEntry>(userId, SK_PREFIX.weight)
-      .sort((a, b) => a.date.localeCompare(b.date)) // oldest first, for a trend
-      .slice(0, limit);
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, limit)
+      .reverse(); // oldest first, so a trend line reads left to right
   }
 
   private collect<T>(userId: UserId, prefix: string): (T & { date: string })[] {

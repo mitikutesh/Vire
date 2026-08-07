@@ -9,12 +9,13 @@ import { ValidatingStore } from './db/validating-store';
 import { logRoutes } from './routes/log';
 import { planRoutes } from './routes/plan';
 import { profileRoutes } from './routes/profile';
+import { weightRoutes } from './routes/weight';
 
 /**
  * The API: one Hono app on one Lambda behind a Function URL.
  *
- * Remaining routes arrive with their stories — weight in E3.4, the offer scan in
- * E4.3, export and deletion in E5.3.
+ * Remaining routes arrive with their stories — the offer scan in E4.3, export and
+ * deletion in E5.3.
  */
 const app = new Hono();
 
@@ -57,6 +58,7 @@ app.get('/health', (c) =>
 app.route('/', profileRoutes(deps));
 app.route('/', planRoutes(deps));
 app.route('/', logRoutes(deps));
+app.route('/', weightRoutes(deps));
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

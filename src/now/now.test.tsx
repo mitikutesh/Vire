@@ -41,11 +41,15 @@ function Harness({
   now,
   log: initial,
   profile,
+  weighInDue = false,
+  onWeighIn = () => {},
   onGoToday,
 }: {
   now: Date;
   log: DailyLog;
   profile: Profile;
+  weighInDue?: boolean;
+  onWeighIn?: () => void;
   onGoToday: () => void;
 }) {
   const [log, setLog] = useState(initial);
@@ -56,20 +60,35 @@ function Harness({
     saveFailed: false,
     dismissSaveError: () => {},
   };
-  return <NowView profile={profile} plan={PLAN} log={handle} now={now} onGoToday={onGoToday} />;
+  return (
+    <NowView
+      profile={profile}
+      plan={PLAN}
+      log={handle}
+      now={now}
+      weighInDue={weighInDue}
+      onWeighIn={onWeighIn}
+      onGoToday={onGoToday}
+    />
+  );
 }
 
-function setup(options: { now?: Date; log?: DailyLog; profile?: Profile } = {}) {
+function setup(
+  options: { now?: Date; log?: DailyLog; profile?: Profile; weighInDue?: boolean } = {},
+) {
   const onGoToday = vi.fn();
+  const onWeighIn = vi.fn();
   render(
     <Harness
       now={options.now ?? at('12:00')}
       log={options.log ?? emptyLog()}
       profile={options.profile ?? PROFILE}
+      weighInDue={options.weighInDue ?? false}
+      onWeighIn={onWeighIn}
       onGoToday={onGoToday}
     />,
   );
-  return { onGoToday, user: userEvent.setup() };
+  return { onGoToday, onWeighIn, user: userEvent.setup() };
 }
 
 describe('the header', () => {
@@ -233,5 +252,23 @@ describe('the tiles', () => {
     expect(screen.getByText(t.now.exerciseDone)).toBeInTheDocument();
     // Burned calories come back off the intake, so there is more budget, not less.
     expect(screen.getByText(String(PROFILE.target + EX[2].k))).toBeInTheDocument();
+  });
+});
+
+describe('the weigh-in prompt (I1)', () => {
+  it('stays hidden until one is due', () => {
+    setup();
+    expect(screen.queryByText(t.settings.weighInPrompt)).not.toBeInTheDocument();
+  });
+
+  it('appears as a card, below the day’s actual work', () => {
+    setup({ weighInDue: true });
+    expect(screen.getByText(t.settings.weighInPrompt)).toBeInTheDocument();
+  });
+
+  it('opens the place the weigh-in is entered', async () => {
+    const { onWeighIn, user } = setup({ weighInDue: true });
+    await user.click(screen.getByText(t.settings.weighInPrompt));
+    expect(onWeighIn).toHaveBeenCalled();
   });
 });

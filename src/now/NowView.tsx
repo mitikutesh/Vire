@@ -1,4 +1,4 @@
-import { Check, Clock, Droplets, Footprints, Moon } from 'lucide-react';
+import { Check, Clock, Droplets, Footprints, Moon, Scale } from 'lucide-react';
 import type { DailyLogHandle } from '@/data/useVireData';
 import { EX, MOVE_WINDOW } from '@/content/plan';
 import { DAY_NAMES, SLOT_LABEL, t } from '@/content/strings';
@@ -27,12 +27,18 @@ export function NowView({
   plan,
   log: logHandle,
   now,
+  weighInDue,
+  onWeighIn,
   onGoToday,
 }: {
   profile: Profile;
   plan: StoredPlan;
   log: DailyLogHandle;
   now: Date;
+  /** A week since the last weigh-in — or there has never been one (I1). */
+  weighInDue: boolean;
+  /** Opens Settings, where the weigh-in field lives. */
+  onWeighIn: () => void;
   /** The movement nudge leads to Today, where the quick-add chips live. */
   onGoToday: () => void;
 }) {
@@ -164,6 +170,20 @@ export function NowView({
           </span>
         </button>
       </div>
+
+      {weighInDue ? (
+        <button
+          type="button"
+          onClick={onWeighIn}
+          // Below the tiles on purpose: a card, not a nag. It never escalates and
+          // never counts how long it has been ignored — it just goes away once a
+          // weigh-in is recorded.
+          className="border-line bg-card flex items-center gap-3 rounded-2xl border p-4 text-left"
+        >
+          <Scale size={20} className="text-sub shrink-0" aria-hidden="true" />
+          <span className="text-ink text-sm">{t.settings.weighInPrompt}</span>
+        </button>
+      ) : null}
     </section>
   );
 }

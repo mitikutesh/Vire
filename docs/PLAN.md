@@ -285,7 +285,8 @@ multi-week planning, calorie photo estimation.
   After the log layer (E3.1): **481 KB raw / 143 KB gzipped** — TanStack Query
   costs ~38 KB raw / ~11 KB gzipped, and 71 % of the gzipped budget is now spent.
   The Now view (E3.2) added ~5 KB raw / ~1.5 KB gzipped: **486 KB / 144 KB**. The
-  Today view (E3.3): **491 KB raw / 145 KB gzipped**.
+  Today view (E3.3): **491 KB raw / 145 KB gzipped**, and weight tracking (E3.4):
+  **497 KB raw / 147 KB gzipped**.
   One lever, measured: the in-memory API is **still in the production bundle**,
   pulled in by the static import in `api/client.ts` along with the curated starter
   week (7 days plus 67 grocery rows) and Zod, even though production uses none of
