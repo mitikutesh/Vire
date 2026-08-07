@@ -2,11 +2,11 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0, M1 and M2 are complete.** 383 unit tests and an end-to-end test in
-real WebKit that walks sign-up, the profile form and the plan gate into the shell
-and expands a day in the Week tab; lint, typecheck, format and the static build are
-clean; one commit per story. Nothing has run against AWS yet — see the owner
-actions below.
+**Milestones M0, M1 and M2 are complete**, plus the first story of M3. 411 unit
+tests and an end-to-end test in real WebKit that walks sign-up, the profile form
+and the plan gate into the shell and expands a day in the Week tab; lint,
+typecheck, format and the static build are clean; one commit per story. Nothing
+has run against AWS yet — see the owner actions below.
 
 | Story                             | State      | Note                                                                                          |
 | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
@@ -312,6 +312,22 @@ nothing is worse than no button.
   drives slot/DayStrip updates.
 - AC: `log.m[slot]` union (`false | true | {n,k}`) modeled as a discriminated
   TS type; `slotKcal` semantics preserved.
+- Done: `api/routes/log.ts` (`GET`/`PUT /log/:date`), the `getLog`/`saveLog` half
+  of the client port, and `src/data/` — a TanStack Query layer that profile and
+  plan moved onto as well, so the app has one data idiom instead of two.
+- The date is the **client's**, never the server's: a Lambda in eu-north-1 and a
+  phone in Helsinki disagree for an hour twice a year, and dinner logged at 23:30
+  must not land on tomorrow. The route rejects a date that is not a real day, since
+  the log is stored under whatever key it is sent.
+- Two bugs found and fixed while writing this, both in the optimistic path:
+  `onMutate` cannot run before an await, so two taps in the same frame both
+  computed from the pre-tap log and the second erased the first — the cache is now
+  written synchronously in `update` and the rollback value travels with the
+  mutation. And `cancelQueries` reverts a query to its pre-fetch data by default,
+  which asynchronously undid the optimistic write; it now passes `revert: false`.
+- Whole-document writes, not field patches. It is a handful of small fields
+  belonging to one screen and one user, so last-write-wins avoids a merge protocol
+  for a conflict that needs two of the user's own devices in the same second.
 
 ### E3.2 — Now view (L)
 

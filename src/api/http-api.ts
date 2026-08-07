@@ -1,7 +1,7 @@
 import type { WeekdayIndex } from '@/domain/constants';
 import { dataOf, parsePlanEvent, takeFrames } from '@/domain/plan-stream';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import type { Profile, StoredPlan } from '@/domain/schema';
+import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import {
   ApiError,
   PlanGenerationError,
@@ -95,6 +95,22 @@ export class HttpVireApi implements VireApi {
     const response = await this.request('/plan/starter', { method: 'POST' });
     if (!response.ok) return HttpVireApi.fail(response);
     return (await response.json()) as StoredPlan;
+  }
+
+  async getLog(date: string): Promise<DailyLog | null> {
+    const response = await this.request(`/log/${date}`);
+    if (!response.ok) return HttpVireApi.fail(response);
+    // 200 with a null body: an untouched day is not an error.
+    return (await response.json()) as DailyLog | null;
+  }
+
+  async saveLog(date: string, log: DailyLog): Promise<DailyLog> {
+    const response = await this.request(`/log/${date}`, {
+      method: 'PUT',
+      body: JSON.stringify(log),
+    });
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as DailyLog;
   }
 
   async generatePlan(

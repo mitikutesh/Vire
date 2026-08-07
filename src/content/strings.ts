@@ -214,6 +214,13 @@ export const t = {
     progress: (done: number, total: number) => `${done} of ${total} days ready`,
   },
 
+  log: {
+    // The optimistic write was rolled back: the tap is visibly undone, and this
+    // says why so the user does not assume it stuck.
+    saveFailed: 'That didn’t save — check your connection and tap again.',
+    dismiss: 'Dismiss',
+  },
+
   now: {
     greeting: {
       quiet: 'Quiet hours',

@@ -1,7 +1,7 @@
 import { WEEKDAYS, type WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import { profileSchema } from '@/domain/schema';
-import type { Profile, StoredPlan } from '@/domain/schema';
+import { dailyLogSchema, profileSchema } from '@/domain/schema';
+import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import { calcTarget } from '@/domain/target';
 import { starterPlan } from '@/content/starter-plan';
 import { ApiError, PlanGenerationError, type ProfileInput, type VireApi } from './types';
@@ -25,6 +25,7 @@ export interface MemoryApiOptions {
 export class MemoryVireApi implements VireApi {
   private profile: Profile | null;
   private plan: StoredPlan | null = null;
+  private readonly logs = new Map<string, DailyLog>();
   private planCount = 0;
   private readonly failDays: readonly WeekdayIndex[];
 
@@ -79,6 +80,20 @@ export class MemoryVireApi implements VireApi {
 
   async adoptStarterPlan(): Promise<StoredPlan> {
     return this.activate(starterPlan(Date.now()));
+  }
+
+  async getLog(date: string): Promise<DailyLog | null> {
+    const log = this.logs.get(date);
+    return log ? structuredClone(log) : null;
+  }
+
+  async saveLog(date: string, log: DailyLog): Promise<DailyLog> {
+    // Parsed with the same schema the route uses, so the defaults the client
+    // converges on are the real ones.
+    const parsed = dailyLogSchema.safeParse(log);
+    if (!parsed.success) throw new ApiError(422, 'invalid_log');
+    this.logs.set(date, parsed.data);
+    return structuredClone(parsed.data);
   }
 
   private activate(plan: Omit<StoredPlan, 'planId'>): StoredPlan {

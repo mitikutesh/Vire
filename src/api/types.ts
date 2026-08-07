@@ -1,6 +1,6 @@
 import type { WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import type { Profile, StoredPlan } from '@/domain/schema';
+import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 
 /** The profile without the target, which only the server may set. */
 export type ProfileInput = Omit<Profile, 'target'>;
@@ -41,6 +41,18 @@ export interface VireApi {
    * quota left and a flaky provider — which is exactly when it gets used.
    */
   adoptStarterPlan(): Promise<StoredPlan>;
+
+  /**
+   * The log for one **client-local** date, or null if the day is untouched.
+   *
+   * The date is the caller's, never the server's: a Lambda in eu-north-1 and a
+   * phone in Helsinki disagree for an hour twice a year, and dinner logged at
+   * 23:30 must not land on tomorrow.
+   */
+  getLog(date: string): Promise<DailyLog | null>;
+
+  /** Write the whole log for a date, returning it as the server parsed it. */
+  saveLog(date: string, log: DailyLog): Promise<DailyLog>;
 }
 
 /** A field-level validation failure the form can attribute to an input. */

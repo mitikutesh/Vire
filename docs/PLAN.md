@@ -282,12 +282,16 @@ multi-week planning, calorie photo estimation.
   plan gate (E2.3): **440 KB raw / 131 KB gzipped**, and after the Week view
   (E2.4): **443 KB raw / 132 KB gzipped** — flat, because both screens are small
   and the shell stopped carrying the starter week as a fixture.
-  One lever found while measuring, for the E5.4 budget check: the curated starter
-  week (7 days plus 67 grocery rows) is **still in the production bundle**, pulled
-  in by `MemoryVireApi` via the static import in `api/client.ts`, even though
-  production never uses either — the server builds the starter plan and sends it
-  over the wire. Making the fake a dynamic import would drop both, at the cost of
-  an async `createVireApi`. Fonts
+  After the log layer (E3.1): **481 KB raw / 143 KB gzipped** — TanStack Query
+  costs ~38 KB raw / ~11 KB gzipped, and 71 % of the gzipped budget is now spent.
+  One lever, measured: the in-memory API is **still in the production bundle**,
+  pulled in by the static import in `api/client.ts` along with the curated starter
+  week (7 days plus 67 grocery rows) and Zod, even though production uses none of
+  them — the server builds the starter plan and sends it over the wire. Stubbing
+  that import out drops the bundle to **421 KB raw / 129 KB gzipped**, so the fake
+  costs **60 KB raw / 14 KB gzipped**, more than the query library it now sits
+  beside. The fix is a dynamic import in the fake branch, at the cost of an async
+  `createVireApi`; do it in E5.4 with the CI budget check. Fonts
   self-hosted (Bricolage Grotesque + Instrument
   Sans via Fontsource — no Google Fonts request, no wordmark FOUT); plan
   generation P95 < 45 s with streamed per-day progress (Lambda ceiling 15 min,

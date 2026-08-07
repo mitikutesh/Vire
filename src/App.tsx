@@ -1,31 +1,44 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { createVireApi } from '@/api/client';
 import type { VireApi } from '@/api/types';
 import { AuthView } from '@/auth/AuthView';
 import { createAuthClient, googleSignInAvailable } from '@/auth/client';
 import { useAuthSession } from '@/auth/useAuthSession';
 import type { AuthClient } from '@/auth/types';
+import { createQueryClient } from '@/data/query';
+import {
+  useDailyLog,
+  usePlan,
+  useProfile,
+  usePlanWriter,
+  useProfileWriter,
+} from '@/data/useVireData';
+import type { DailyLogHandle } from '@/data/useVireData';
+import { useClock } from '@/hooks/useClock';
 import { GROC_CATS } from '@/domain/constants';
-import type { DailyLog, Profile, SlotKey, StoredPlan, Swap } from '@/domain/schema';
+import type { Profile, SlotKey, StoredPlan, Swap } from '@/domain/schema';
 import { SLOTS } from '@/content/plan';
 import { DAY_NAMES, SLOT_LABEL, t } from '@/content/strings';
 import { PlanGate } from '@/plan/PlanGate';
 import { WeekView } from '@/week/WeekView';
-import { getSlotKey, hourOf, weekdayIdx } from '@/domain/clock';
-import { burnedKcal, eatenKcal, emptyLog, remainingKcal } from '@/domain/log';
+import { dateKey, getSlotKey, hourOf, weekdayIdx } from '@/domain/clock';
+import { burnedKcal, eatenKcal, remainingKcal } from '@/domain/log';
 import { AppShell } from '@/ui/AppShell';
 import { DayStrip } from '@/ui/DayStrip';
 import { MealCard } from '@/ui/MealCard';
 import { Ring } from '@/ui/Ring';
+import { Toast } from '@/ui/Toast';
 import type { Tab } from '@/ui/BottomNav';
 import { SettingsView } from '@/settings/SettingsView';
 
 /**
- * M0 shell, now reading the user's real plan.
+ * The app.
  *
- * The tabs themselves arrive with their own stories — Week in E2.4, Now and Today
- * in E3.2/E3.3, Shop in E4.1 — along with the 30-second clock tick and day
- * rollover. The log state here is still local and throwaway (E3.1).
+ * The Now and Today tabs are still the M0 fixture layout; they get their real
+ * treatment in E3.2 and E3.3, and Shop in E4.1. What is real as of E3.1: the
+ * day's log is persisted per client-local date, every tap is optimistic, and the
+ * clock ticks so the app follows the day across midnight.
  */
 /**
  * `auth` and `api` are injectable so tests can start from a signed-in session
@@ -38,6 +51,9 @@ export default function App({
   // One client for the app's lifetime: rebuilding it would reconfigure Amplify
   // and drop the session on every render.
   const auth = useMemo(() => injectedAuth ?? createAuthClient(), [injectedAuth]);
+  // One client per App instance. Per test, too, which is what keeps one case's
+  // cached log from showing up in the next.
+  const queryClient = useMemo(() => createQueryClient(), []);
   const { state, onAuthed, signOut } = useAuthSession(auth);
 
   if (state.status === 'loading') {
@@ -55,7 +71,11 @@ export default function App({
     return <AuthView auth={auth} onAuthed={onAuthed} googleEnabled={googleSignInAvailable()} />;
   }
 
-  return <SignedInApp auth={auth} api={injectedApi} onSignOut={signOut} />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <SignedInApp auth={auth} api={injectedApi} onSignOut={signOut} />
+    </QueryClientProvider>
+  );
 }
 
 /**
@@ -75,42 +95,33 @@ function SignedInApp({
   onSignOut: () => void;
 }) {
   const api = useMemo(() => injectedApi ?? createVireApi(auth), [injectedApi, auth]);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [plan, setPlan] = useState<StoredPlan | null>(null);
-  const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /**
    * Regenerating: the gate is showing, but the stored plan is still there and
-   * still good. Kept separate from `plan` so backing out restores the week
-   * instead of stranding the user — the server was never told to delete anything.
+   * still good. Kept separate from the plan itself so backing out restores the
+   * week instead of stranding the user — the server was never told to delete
+   * anything.
    */
   const [replacingPlan, setReplacingPlan] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const loaded = await api.getProfile();
-        if (cancelled) return;
-        setProfile(loaded);
-        // Only worth asking once there is a profile: generation needs one, so a
-        // user without a profile cannot have a plan.
-        if (loaded) {
-          const week = await api.getPlan();
-          if (!cancelled) setPlan(week);
-        }
-      } catch (error) {
-        // Treated as first-run rather than a dead end: the gates ahead are the
-        // only way forward, and each surfaces its own failure.
-        console.error('[vire] Could not load the profile or plan', error);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
+  const profileQuery = useProfile(api);
+  const profile = profileQuery.data ?? null;
+  // A profile is a precondition for a plan, so this waits rather than firing a
+  // request that can only 404.
+  const planQuery = usePlan(api, profile !== null);
+  const plan = planQuery.data ?? null;
+
+  const setProfile = useProfileWriter();
+  const setPlan = usePlanWriter();
+
+  const now = useClock();
+  // The client's own date. Midnight passing changes the key, and the new day's
+  // log loads on its own.
+  const log = useDailyLog(api, dateKey(now));
+
+  // A failed read is treated as "nothing there": the gates ahead are the only way
+  // forward and each surfaces its own failure.
+  const loading = profileQuery.isPending || (profile !== null && planQuery.isPending);
 
   if (loading) {
     return (
@@ -143,7 +154,13 @@ function SignedInApp({
 
   return (
     <>
-      <FixtureShell profile={profile} plan={plan} onOpenSettings={() => setSettingsOpen(true)} />
+      <FixtureShell
+        profile={profile}
+        plan={plan}
+        log={log}
+        now={now}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       {settingsOpen ? (
         <SettingsView
           api={api}
@@ -165,38 +182,39 @@ function SignedInApp({
 }
 
 /**
- * The M0 shell, reading the saved profile's target and the user's own plan. The
- * live views arrive with their own stories (E2.4, E3.2, E3.3, E4.1).
+ * The M0 shell, reading the saved profile's target, the user's own plan and the
+ * day's persisted log. The live views arrive with their own stories (E3.2, E3.3,
+ * E4.1).
  */
 function FixtureShell({
   profile,
   plan,
+  log: logHandle,
+  now,
   onOpenSettings,
 }: {
   profile: Profile;
   plan: StoredPlan;
+  log: DailyLogHandle;
+  now: Date;
   onOpenSettings: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('now');
-  const [log, setLog] = useState<DailyLog>(emptyLog);
+  const { log, update } = logHandle;
 
-  const now = useMemo(() => new Date(), []);
   const wd = weekdayIdx(now);
   const day = plan.days[wd];
   const nowHour = hourOf(now);
   const nowSlot = getSlotKey(nowHour);
 
   const toggleSlot = (slot: SlotKey) =>
-    setLog((prev) => ({
-      ...prev,
-      m: { ...prev.m, [slot]: !prev.m[slot] },
-    }));
+    update((prev) => ({ ...prev, m: { ...prev.m, [slot]: !prev.m[slot] } }));
 
   const logSwap = (slot: SlotKey, swap: Swap) =>
-    setLog((prev) => ({ ...prev, m: { ...prev.m, [slot]: swap } }));
+    update((prev) => ({ ...prev, m: { ...prev.m, [slot]: swap } }));
 
   const clearSwap = (slot: SlotKey) =>
-    setLog((prev) => ({ ...prev, m: { ...prev.m, [slot]: false } }));
+    update((prev) => ({ ...prev, m: { ...prev.m, [slot]: false } }));
 
   const eaten = eatenKcal(log, day);
   const burned = burnedKcal(log, wd);
@@ -204,6 +222,10 @@ function FixtureShell({
 
   return (
     <AppShell tab={tab} onTabChange={setTab} onOpenSettings={onOpenSettings}>
+      {logHandle.saveFailed ? (
+        <Toast message={t.log.saveFailed} onDismiss={logHandle.dismissSaveError} />
+      ) : null}
+
       {tab === 'now' ? (
         <section className="flex flex-col gap-4">
           <div>

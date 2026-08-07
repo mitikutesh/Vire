@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryVireApi } from '@/api/memory-api';
+import { ApiError } from '@/api/types';
 import { FakeAuthClient } from '@/auth/fake-client';
 import { t } from '@/content/strings';
 import type { Profile } from '@/domain/schema';
@@ -36,6 +37,10 @@ async function readyApi(profile: Profile = PROFILE) {
   await api.adoptStarterPlan();
   return api;
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 async function renderSignedIn(profile: Profile = PROFILE) {
   render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={await readyApi(profile)} />);
@@ -136,6 +141,52 @@ describe('plan gate', () => {
     await user.click(screen.getByRole('button', { name: t.planGate.starter(false) }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
+  });
+});
+
+describe('the day’s log', () => {
+  it('survives a reload', async () => {
+    // The prototype kept the log in a tab that lost it on refresh; this is the
+    // story that fixed that.
+    const user = userEvent.setup();
+    const api = await readyApi();
+
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={api} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Today' }));
+    const [firstMeal] = screen.getAllByRole('checkbox');
+    await user.click(firstMeal!);
+    await waitFor(() => expect(firstMeal).toHaveAttribute('aria-checked', 'true'));
+
+    // A fresh App against the same API: a new cache, reading from the server.
+    cleanup();
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={api} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Today' }));
+    await waitFor(() =>
+      expect(screen.getAllByRole('checkbox')[0]).toHaveAttribute('aria-checked', 'true'),
+    );
+  });
+
+  it('undoes the tap and says so when the write fails', async () => {
+    const user = userEvent.setup();
+    const api = await readyApi();
+    vi.spyOn(api, 'saveLog').mockRejectedValue(new ApiError(0, 'network'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={api} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Today' }));
+
+    const [firstMeal] = screen.getAllByRole('checkbox');
+    await user.click(firstMeal!);
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(t.log.saveFailed));
+    // The tick is gone with it — a tap that silently did nothing would be worse.
+    expect(screen.getAllByRole('checkbox')[0]).toHaveAttribute('aria-checked', 'false');
+
+    await user.click(screen.getByRole('button', { name: t.log.dismiss }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
 
