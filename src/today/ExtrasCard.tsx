@@ -18,10 +18,13 @@ export function ExtrasCard({
   extras,
   onAdd,
   onRemove,
+  readOnly = false,
 }: {
   extras: readonly KcalEntry[];
   onAdd: (entry: KcalEntry) => void;
   onRemove: (index: number) => void;
+  /** A past day (I3): what was eaten is shown, the entry form is not. */
+  readOnly?: boolean;
 }) {
   const [name, setName] = useState('');
   const [kcal, setKcal] = useState('');
@@ -40,48 +43,54 @@ export function ExtrasCard({
 
   return (
     <section className="border-line bg-card flex flex-col gap-2 rounded-2xl border p-4">
-      <p className="text-ink text-sm font-semibold">{t.today.extraTitle}</p>
-      <p className="text-sub text-xs" style={{ marginTop: -4 }}>
-        {t.today.extraHelp}
+      <p className="text-ink text-sm font-semibold">
+        {readOnly ? t.today.extraTitlePast : t.today.extraTitle}
       </p>
+      {readOnly ? null : (
+        <p className="text-sub text-xs" style={{ marginTop: -4 }}>
+          {t.today.extraHelp}
+        </p>
+      )}
 
-      <form
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-        className="flex gap-2"
-      >
-        <label htmlFor={nameId} className="sr-only">
-          {t.today.extraWhat}
-        </label>
-        <input
-          id={nameId}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder={t.today.extraWhat}
-          className="border-line bg-paper text-ink min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
-        />
+      {readOnly ? null : (
+        <form
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit();
+          }}
+          className="flex gap-2"
+        >
+          <label htmlFor={nameId} className="sr-only">
+            {t.today.extraWhat}
+          </label>
+          <input
+            id={nameId}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t.today.extraWhat}
+            className="border-line bg-paper text-ink min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+          />
 
-        <label htmlFor={kcalId} className="sr-only">
-          {t.today.extraKcal}
-        </label>
-        <input
-          id={kcalId}
-          value={kcal}
-          // Digits only, so a stray letter cannot make the row unparseable.
-          onChange={(event) => setKcal(event.target.value.replace(/\D/g, ''))}
-          placeholder={t.today.extraKcal}
-          inputMode="numeric"
-          className="border-line bg-paper text-ink rounded-xl border px-3 py-2 text-sm outline-none"
-          style={{ width: 76 }}
-        />
+          <label htmlFor={kcalId} className="sr-only">
+            {t.today.extraKcal}
+          </label>
+          <input
+            id={kcalId}
+            value={kcal}
+            // Digits only, so a stray letter cannot make the row unparseable.
+            onChange={(event) => setKcal(event.target.value.replace(/\D/g, ''))}
+            placeholder={t.today.extraKcal}
+            inputMode="numeric"
+            className="border-line bg-paper text-ink rounded-xl border px-3 py-2 text-sm outline-none"
+            style={{ width: 76 }}
+          />
 
-        <button type="submit" className="bg-ink rounded-xl px-3 text-sm font-semibold text-white">
-          {t.today.extraAdd}
-        </button>
-      </form>
+          <button type="submit" className="bg-ink rounded-xl px-3 text-sm font-semibold text-white">
+            {t.today.extraAdd}
+          </button>
+        </form>
+      )}
 
       {extras.length > 0 ? (
         <ul className="flex flex-col gap-1">
@@ -91,13 +100,15 @@ export function ExtrasCard({
               className="text-ink flex items-center justify-between text-sm"
             >
               <span>{t.today.extraRow(entry.n, entry.k)}</span>
-              <button
-                type="button"
-                aria-label={t.today.removeAria(entry.n)}
-                onClick={() => onRemove(i)}
-              >
-                <X size={15} className="text-sub" aria-hidden="true" />
-              </button>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  aria-label={t.today.removeAria(entry.n)}
+                  onClick={() => onRemove(i)}
+                >
+                  <X size={15} className="text-sub" aria-hidden="true" />
+                </button>
+              )}
             </li>
           ))}
         </ul>

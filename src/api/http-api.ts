@@ -5,6 +5,7 @@ import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import {
   ApiError,
   PlanGenerationError,
+  type DatedLog,
   type DatedWeight,
   type FieldIssue,
   type PlanFailure,
@@ -112,6 +113,12 @@ export class HttpVireApi implements VireApi {
     });
     if (!response.ok) return HttpVireApi.fail(response);
     return (await response.json()) as DailyLog;
+  }
+
+  async listLogs(): Promise<DatedLog[]> {
+    const response = await this.request('/logs');
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as DatedLog[];
   }
 
   async listWeights(): Promise<DatedWeight[]> {

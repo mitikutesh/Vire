@@ -1,4 +1,4 @@
-import { Flame } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Flame } from 'lucide-react';
 import type { DailyLogHandle } from '@/data/useVireData';
 import { EX, SLOTS } from '@/content/plan';
 import { DAY_NAMES, t } from '@/content/strings';
@@ -22,16 +22,25 @@ export function TodayView({
   profile,
   plan,
   log: logHandle,
-  now,
+  viewedDate,
+  dayOffset,
+  onChangeOffset,
 }: {
   profile: Profile;
   plan: StoredPlan;
   log: DailyLogHandle;
-  now: Date;
+  /** The day being shown — today, or a day behind it (I3). */
+  viewedDate: Date;
+  /** 0 for today, negative for the past. Never positive. */
+  dayOffset: number;
+  onChangeOffset: (offset: number) => void;
 }) {
   const { log, update } = logHandle;
-  const wd = weekdayIdx(now);
+  const wd = weekdayIdx(viewedDate);
   const day = plan.days[wd];
+  // A closed day is shown, not offered for editing. Writing to it would also mean
+  // writing a log the user cannot see the consequences of.
+  const readOnly = dayOffset < 0;
 
   const eaten = eatenKcal(log, day);
   const burned = burnedKcal(log, wd);
@@ -43,14 +52,47 @@ export function TodayView({
 
   return (
     <section className="flex flex-col gap-4">
-      <div>
-        <p className="text-sub text-sm">
-          {DAY_NAMES[wd]} {now.getDate()}.{now.getMonth() + 1}.
-        </p>
-        <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
-          {t.today.title}
-        </h1>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label={t.today.prevDayAria}
+          onClick={() => onChangeOffset(dayOffset - 1)}
+          className="border-line bg-card shrink-0 rounded-full border p-2"
+        >
+          <ChevronLeft size={17} className="text-ink" aria-hidden="true" />
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-sub text-sm">{t.today.dayHeading(DAY_NAMES[wd], viewedDate)}</p>
+          <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
+            {t.today.title}
+          </h1>
+        </div>
+
+        <button
+          type="button"
+          aria-label={t.today.nextDayAria}
+          onClick={() => onChangeOffset(dayOffset + 1)}
+          // Tomorrow has no log to show and nothing that can be logged into it.
+          disabled={dayOffset >= 0}
+          className="border-line bg-card shrink-0 rounded-full border p-2 disabled:opacity-40"
+        >
+          <ChevronRight size={17} className="text-ink" aria-hidden="true" />
+        </button>
       </div>
+
+      {readOnly ? (
+        <div className="border-line bg-card flex items-center justify-between gap-2 rounded-2xl border p-3">
+          <p className="text-sub text-sm">{t.today.readOnly}</p>
+          <button
+            type="button"
+            onClick={() => onChangeOffset(0)}
+            className="text-lake shrink-0 text-sm font-semibold"
+          >
+            {t.today.backToToday}
+          </button>
+        </div>
+      ) : null}
 
       <div className="bg-ink flex items-center justify-between gap-3 rounded-2xl p-4">
         <div className="min-w-0">
@@ -81,6 +123,7 @@ export function TodayView({
             onToggle={() => setSlot(slot, !log.m[slot])}
             onLogSwap={(swap) => setSlot(slot, swap)}
             onClearSwap={() => setSlot(slot, false)}
+            disabled={readOnly}
           />
         ))}
       </div>
@@ -96,12 +139,14 @@ export function TodayView({
         onRemove={(index) =>
           update((prev) => ({ ...prev, exx: prev.exx.filter((_, i) => i !== index) }))
         }
+        readOnly={readOnly}
       />
 
       <WaterCard
         glasses={log.water}
         goal={waterGoalGlasses(profile.waterMl)}
         onChange={(glasses) => update((prev) => ({ ...prev, water: glasses }))}
+        readOnly={readOnly}
       />
 
       <ExtrasCard
@@ -110,6 +155,7 @@ export function TodayView({
         onRemove={(index) =>
           update((prev) => ({ ...prev, extra: prev.extra.filter((_, i) => i !== index) }))
         }
+        readOnly={readOnly}
       />
 
       {/* Health guardrail 4: the numbers are estimates, and say so. */}

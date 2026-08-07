@@ -2,8 +2,8 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0, M1 and M2 are complete**, plus four of M3's five stories. 495
-unit tests and an end-to-end test in real WebKit that walks sign-up, the profile form
+**Milestones M0 through M3 are complete.** 519 unit tests and an end-to-end test in
+real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing
 has run against AWS yet — see the owner actions below.
@@ -382,6 +382,23 @@ nothing is worse than no button.
   future days unreachable.
 - AC: simple 7-day adherence summary (kcal in vs target per day) — no streaks,
   no badges.
+- Done: day navigation on Today, `GET /logs`, and `AdherenceSummary` on the Week
+  tab below the trend.
+- The viewed day is an **offset from today**, not a date. Two things fall out for
+  free: a day that starts as "today" stays today when midnight passes with the app
+  open, and the future is unreachable by construction rather than by a check.
+- A closed day hides its controls rather than disabling them. A disabled button
+  still invites a tap; on a past day the state is simply a fact, so the movement
+  card reads "Not done" instead of offering "Mark done".
+- Known limitation, documented in the component: a meal marked eaten as planned is
+  counted at _the current plan's_ calories for that weekday. Swaps and extras are
+  exact because their calories live in the log. Regenerating mid-week therefore
+  approximates older planned meals — accurate enough for a mirror, and the
+  alternative is denormalising a total into every log write.
+- Found while wiring it: the rollback toast was still watching today's log handle
+  after the Today tab moved to a separate handle for the viewed day, so a failed
+  write on a past day would have been silently swallowed. It now follows whichever
+  handle failed, and the existing App test caught it.
 
 ---
 

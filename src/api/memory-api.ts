@@ -7,6 +7,7 @@ import { starterPlan } from '@/content/starter-plan';
 import {
   ApiError,
   PlanGenerationError,
+  type DatedLog,
   type DatedWeight,
   type ProfileInput,
   type VireApi,
@@ -101,6 +102,13 @@ export class MemoryVireApi implements VireApi {
     if (!parsed.success) throw new ApiError(422, 'invalid_log');
     this.logs.set(date, parsed.data);
     return structuredClone(parsed.data);
+  }
+
+  async listLogs(): Promise<DatedLog[]> {
+    return [...this.logs.entries()]
+      .map(([date, log]) => ({ ...structuredClone(log), date }))
+      .sort((a, b) => b.date.localeCompare(a.date)) // newest first, like the store
+      .slice(0, 7);
   }
 
   async listWeights(): Promise<DatedWeight[]> {

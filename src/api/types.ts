@@ -2,6 +2,11 @@ import type { WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
 import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 
+/** A day's log with the date it belongs to. */
+export interface DatedLog extends DailyLog {
+  date: string;
+}
+
 /** A weigh-in as stored, with the date it belongs to. */
 export interface DatedWeight {
   date: string;
@@ -59,6 +64,9 @@ export interface VireApi {
 
   /** Write the whole log for a date, returning it as the server parsed it. */
   saveLog(date: string, log: DailyLog): Promise<DailyLog>;
+
+  /** The recent days, newest first, for the adherence summary (I3). */
+  listLogs(): Promise<DatedLog[]>;
 
   /** Weigh-in history, oldest first, so a trend line reads left to right (I1). */
   listWeights(): Promise<DatedWeight[]>;

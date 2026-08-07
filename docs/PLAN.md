@@ -286,7 +286,9 @@ multi-week planning, calorie photo estimation.
   costs ~38 KB raw / ~11 KB gzipped, and 71 % of the gzipped budget is now spent.
   The Now view (E3.2) added ~5 KB raw / ~1.5 KB gzipped: **486 KB / 144 KB**. The
   Today view (E3.3): **491 KB raw / 145 KB gzipped**, and weight tracking (E3.4):
-  **497 KB raw / 147 KB gzipped**.
+  **497 KB raw / 147 KB gzipped**. End of M3, with history (E3.5): **501 KB raw /
+  147 KB gzipped** — 74 % of the gzipped budget, and the 14 KB the in-memory fake
+  costs is now the cheapest thing left to reclaim.
   One lever, measured: the in-memory API is **still in the production bundle**,
   pulled in by the static import in `api/client.ts` along with the curated starter
   week (7 days plus 67 grocery rows) and Zod, even though production uses none of

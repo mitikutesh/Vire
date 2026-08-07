@@ -3,9 +3,10 @@ import { ChevronDown } from 'lucide-react';
 import { EX, SLOTS } from '@/content/plan';
 import { DAY_NAMES, DAY_SHORT, SLOT_LABEL, t } from '@/content/strings';
 import type { WeekdayIndex } from '@/domain/constants';
-import type { DatedWeight } from '@/api/types';
+import type { DatedLog, DatedWeight } from '@/api/types';
 import type { DayPlan, StoredPlan } from '@/domain/schema';
 import { WeightTrend } from '@/weight/WeightTrend';
+import { AdherenceSummary } from './AdherenceSummary';
 
 /**
  * The Week tab: seven collapsible days.
@@ -25,12 +26,17 @@ export function WeekView({
   weights,
   currentWeight,
   goalWeight,
+  logs,
+  target,
 }: {
   plan: StoredPlan;
   today: WeekdayIndex;
   weights: readonly DatedWeight[];
   currentWeight: number;
   goalWeight: number;
+  /** The last seven days, newest first (I3). */
+  logs: readonly DatedLog[];
+  target: number;
 }) {
   // Not "no day open": a collapsed week would hide the thing the tab is for.
   const [open, setOpen] = useState<number>(today);
@@ -48,6 +54,8 @@ export function WeekView({
       </div>
 
       <WeightTrend entries={weights} current={currentWeight} goal={goalWeight} />
+
+      <AdherenceSummary logs={logs} plan={plan} target={target} />
 
       <ul className="flex flex-col gap-2">
         {plan.days.map((day, i) => {

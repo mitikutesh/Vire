@@ -16,10 +16,13 @@ export function WaterCard({
   glasses,
   goal,
   onChange,
+  readOnly = false,
 }: {
   glasses: number;
   goal: number;
   onChange: (glasses: number) => void;
+  /** A past day (I3): the bar still reads, the buttons go away. */
+  readOnly?: boolean;
 }) {
   return (
     <section className="bg-lake-soft border-line rounded-2xl border p-4">
@@ -28,26 +31,28 @@ export function WaterCard({
           <Droplets size={17} className="text-lake shrink-0" aria-hidden="true" />
           {t.today.waterGoal(goal)}
         </p>
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            aria-label={t.today.waterLessAria}
-            onClick={() => onChange(Math.max(0, glasses - 1))}
-            className="rounded-full bg-white p-1"
-          >
-            <Minus size={15} className="text-lake" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            aria-label={t.today.waterMoreAria}
-            // Capped at the goal: the bar has exactly that many segments, so
-            // counting past it would show progress that cannot be drawn.
-            onClick={() => onChange(Math.min(goal, glasses + 1))}
-            className="bg-lake rounded-full p-1"
-          >
-            <Plus size={15} color="#fff" aria-hidden="true" />
-          </button>
-        </div>
+        {readOnly ? null : (
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              aria-label={t.today.waterLessAria}
+              onClick={() => onChange(Math.max(0, glasses - 1))}
+              className="rounded-full bg-white p-1"
+            >
+              <Minus size={15} className="text-lake" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label={t.today.waterMoreAria}
+              // Capped at the goal: the bar has exactly that many segments, so
+              // counting past it would show progress that cannot be drawn.
+              onClick={() => onChange(Math.min(goal, glasses + 1))}
+              className="bg-lake rounded-full p-1"
+            >
+              <Plus size={15} color="#fff" aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
 
       <div

@@ -39,11 +39,30 @@ export interface LogRouteDeps {
   verifier: TokenVerifier;
 }
 
+/** How far back the adherence summary looks (I3). One week, no streaks. */
+export const ADHERENCE_DAYS = 7;
+
 export function logRoutes({ store, verifier }: LogRouteDeps) {
   const app = new Hono();
 
   const requireUser = async (authorization: string | undefined) =>
     userIdFromClaims(await verifier.verify(bearerToken(authorization)));
+
+  /**
+   * The recent days, newest first, for the adherence summary.
+   *
+   * A fixed window rather than a client-supplied limit: there is exactly one
+   * caller and one question, and an open limit is a way to ask for the whole
+   * history in one request.
+   */
+  app.get('/logs', async (c) => {
+    try {
+      const userId = await requireUser(c.req.header('authorization'));
+      return c.json(await store.listLogs(userId, ADHERENCE_DAYS));
+    } catch (error) {
+      return unauthorizedOr500(c, error);
+    }
+  });
 
   app.get('/log/:date', async (c) => {
     const date = c.req.param('date');

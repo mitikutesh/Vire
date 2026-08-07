@@ -39,6 +39,8 @@ interface LogWrite {
 
 export interface DailyLogHandle {
   log: DailyLog;
+  /** The date this handle is reading and writing. */
+  date: string;
   /** Apply a change to the freshest log there is, optimistically. */
   update: (change: (previous: DailyLog) => DailyLog) => void;
   /** False until the day's log has been read at least once. */
@@ -81,6 +83,8 @@ export function useDailyLog(api: VireApi, date: string): DailyLogHandle {
     onSuccess: (stored) => {
       // The server's parsed copy, so the client converges on the real defaults.
       queryClient.setQueryData(key, stored);
+      // The adherence summary counts this day, so it is now stale.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.logs });
     },
   });
 
@@ -99,11 +103,17 @@ export function useDailyLog(api: VireApi, date: string): DailyLogHandle {
 
   return {
     log: query.data ?? emptyLog(),
+    date,
     update,
     ready: !query.isPending,
     saveFailed: mutation.isError,
     dismissSaveError: mutation.reset,
   };
+}
+
+/** The recent days, newest first, for the adherence summary (I3). */
+export function useLogs(api: VireApi, enabled: boolean) {
+  return useQuery({ queryKey: queryKeys.logs, queryFn: () => api.listLogs(), enabled });
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createVireApi } from '@/api/client';
-import type { DatedWeight, VireApi } from '@/api/types';
+import type { DatedLog, DatedWeight, VireApi } from '@/api/types';
 import { AuthView } from '@/auth/AuthView';
 import { createAuthClient, googleSignInAvailable } from '@/auth/client';
 import { useAuthSession } from '@/auth/useAuthSession';
@@ -9,6 +9,7 @@ import type { AuthClient } from '@/auth/types';
 import { createQueryClient } from '@/data/query';
 import {
   useDailyLog,
+  useLogs,
   usePlan,
   useProfile,
   usePlanWriter,
@@ -25,7 +26,7 @@ import { TodayView } from '@/today/TodayView';
 import { PlanGate } from '@/plan/PlanGate';
 import { WeekView } from '@/week/WeekView';
 import { weighInDue } from '@/weight/weigh-in-due';
-import { dateKey, weekdayIdx } from '@/domain/clock';
+import { addDays, dateKey, weekdayIdx } from '@/domain/clock';
 import { AppShell } from '@/ui/AppShell';
 import { Toast } from '@/ui/Toast';
 import type { Tab } from '@/ui/BottomNav';
@@ -117,6 +118,8 @@ function SignedInApp({
   // has been, so it cannot wait for the Week tab to be opened.
   const weightsQuery = useWeights(api, profile !== null);
   const weights = weightsQuery.data ?? [];
+  const logsQuery = useLogs(api, profile !== null);
+  const logs = logsQuery.data ?? [];
 
   const now = useClock();
   // The client's own date. Midnight passing changes the key, and the new day's
@@ -164,6 +167,8 @@ function SignedInApp({
         log={log}
         now={now}
         weights={weights}
+        logs={logs}
+        api={api}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       {settingsOpen ? (
@@ -200,6 +205,8 @@ function Shell({
   log: logHandle,
   now,
   weights,
+  logs,
+  api,
   onOpenSettings,
 }: {
   profile: Profile;
@@ -207,15 +214,36 @@ function Shell({
   log: DailyLogHandle;
   now: Date;
   weights: readonly DatedWeight[];
+  logs: readonly DatedLog[];
+  api: VireApi;
   onOpenSettings: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('now');
+  /**
+   * Which day the Today tab is showing, as an offset from today (I3).
+   *
+   * An offset rather than a date, so a day that starts as "today" stays today when
+   * midnight passes with the app open — and so the future is unreachable by
+   * construction rather than by a check.
+   */
+  const [dayOffset, setDayOffset] = useState(0);
+  const viewedDate = dayOffset === 0 ? now : addDays(now, dayOffset);
+  // Same query key as `logHandle` while the offset is zero, so viewing today
+  // costs no extra request.
+  const viewedLog = useDailyLog(api, dateKey(viewedDate));
   const wd = weekdayIdx(now);
+
+  /**
+   * Whichever handle's write failed. Two handles exist because Now is always
+   * today while Today may be looking back, and each owns its own mutation state —
+   * so the toast has to ask both rather than only the one it started with.
+   */
+  const failedWrite = logHandle.saveFailed ? logHandle : viewedLog.saveFailed ? viewedLog : null;
 
   return (
     <AppShell tab={tab} onTabChange={setTab} onOpenSettings={onOpenSettings}>
-      {logHandle.saveFailed ? (
-        <Toast message={t.log.saveFailed} onDismiss={logHandle.dismissSaveError} />
+      {failedWrite ? (
+        <Toast message={t.log.saveFailed} onDismiss={failedWrite.dismissSaveError} />
       ) : null}
 
       {tab === 'now' ? (
@@ -231,7 +259,14 @@ function Shell({
       ) : null}
 
       {tab === 'today' ? (
-        <TodayView profile={profile} plan={plan} log={logHandle} now={now} />
+        <TodayView
+          profile={profile}
+          plan={plan}
+          log={viewedLog}
+          viewedDate={viewedDate}
+          dayOffset={dayOffset}
+          onChangeOffset={(offset) => setDayOffset(Math.min(0, offset))}
+        />
       ) : null}
 
       {tab === 'week' ? (
@@ -241,6 +276,8 @@ function Shell({
           weights={weights}
           currentWeight={profile.w}
           goalWeight={profile.goalW}
+          logs={logs}
+          target={profile.target}
         />
       ) : null}
 

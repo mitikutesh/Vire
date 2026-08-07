@@ -270,6 +270,8 @@ export const t = {
     movementSummary: (name: string, min: number) => `${name} · ${min} min`,
     movementKcal: (kcal: number) => `≈ ${kcal} kcal`,
     markDone: 'Mark done',
+    // A closed day states the fact rather than offering the action.
+    notDone: 'Not done',
     done: 'Done ✓',
     // Named, not a bare "Remove": with four logged rows a screen reader would
     // otherwise announce four identical buttons.
@@ -286,6 +288,7 @@ export const t = {
     waterMoreAria: 'One more glass',
 
     extraTitle: 'Ate something extra?',
+    extraTitlePast: 'Extras',
     extraHelp:
       'Adds on top of the meals. To swap a whole meal, open it above and log what you ate instead.',
     extraWhat: 'What (optional)',
@@ -301,6 +304,8 @@ export const t = {
     nextDayAria: 'Next day',
     readOnly: 'Past day — logging is closed.',
     backToToday: 'Back to today',
+    dayHeading: (dayName: string, date: Date) =>
+      `${dayName} ${date.getDate()}.${date.getMonth() + 1}.`,
   },
 
   week: {
@@ -320,6 +325,13 @@ export const t = {
     // A line is a picture; this is the same information as a sentence.
     weightTrendAria: (count: number, first: number, last: number) =>
       `Weight trend over the last ${count} weigh-ins: ${first} kg to ${last} kg.`,
+
+    // I3: the last seven days. Deliberately no streak and no badge — a streak
+    // turns one bad Tuesday into a reason to give up.
+    adherenceTitle: 'Last seven days',
+    adherenceRow: (eaten: number, target: number) => `${eaten} / ${target}`,
+    adherenceEmpty: 'Log a day and it will show up here.',
+    adherenceNote: 'Estimates, and only the days you logged.',
   },
 
   shop: {

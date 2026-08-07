@@ -55,6 +55,7 @@ function Harness({
   const [log, setLog] = useState(initial);
   const handle: DailyLogHandle = {
     log,
+    date: '2026-08-12',
     update: (change) => setLog((prev) => change(prev)),
     ready: true,
     saveFailed: false,

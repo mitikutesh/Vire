@@ -6,7 +6,7 @@ import { UnauthorizedError, userIdFromClaims, type VerifiedClaims } from '../aut
 import type { TokenVerifier } from '../auth/verifier';
 import { MemoryStore } from '../db/memory-store';
 import { ValidatingStore } from '../db/validating-store';
-import { logRoutes } from './log';
+import { ADHERENCE_DAYS, logRoutes } from './log';
 
 const ALICE = '11111111-1111-4111-8111-111111111111';
 const BOB = '22222222-2222-4222-8222-222222222222';
@@ -34,7 +34,10 @@ function setup() {
       body: JSON.stringify(log),
     });
 
-  return { app, store, get, put };
+  const listLogs = (sub = ALICE) =>
+    app.request('/logs', { headers: { authorization: `Bearer token-${sub}` } });
+
+  return { app, store, get, put, listLogs };
 }
 
 const LOGGED: DailyLog = {
@@ -145,5 +148,44 @@ describe('authorization', () => {
     // And the store agrees: the partition came from the token, not the request.
     expect(await store.getLog(userIdFromClaims({ sub: BOB }), DATE)).toBeNull();
     expect(await store.getLog(userIdFromClaims({ sub: ALICE }), DATE)).not.toBeNull();
+  });
+});
+
+describe('GET /logs', () => {
+  it('starts empty', async () => {
+    const { listLogs } = setup();
+    expect(await (await listLogs()).json()).toEqual([]);
+  });
+
+  it('returns the recent days, newest first', async () => {
+    const { put, listLogs } = setup();
+    await put({ ...emptyLog(), water: 1 }, '2026-08-06');
+    await put({ ...emptyLog(), water: 2 }, '2026-08-07');
+    await put({ ...emptyLog(), water: 3 }, '2026-08-08');
+
+    const days = (await (await listLogs()).json()) as { date: string }[];
+    expect(days.map((d) => d.date)).toEqual(['2026-08-08', '2026-08-07', '2026-08-06']);
+  });
+
+  it('caps the window rather than taking a limit from the caller', async () => {
+    // One caller, one question. An open limit is a way to ask for the whole
+    // history in a single request.
+    const { put, listLogs } = setup();
+    for (let i = 1; i <= ADHERENCE_DAYS + 3; i += 1) {
+      await put(emptyLog(), `2026-08-${String(i).padStart(2, '0')}`);
+    }
+    const days = (await (await listLogs()).json()) as unknown[];
+    expect(days).toHaveLength(ADHERENCE_DAYS);
+  });
+
+  it('refuses an unauthenticated request', async () => {
+    const { app } = setup();
+    expect((await app.request('/logs')).status).toBe(401);
+  });
+
+  it('keeps one user’s days out of another’s reach', async () => {
+    const { put, listLogs } = setup();
+    await put(LOGGED);
+    expect(await (await listLogs(BOB)).json()).toEqual([]);
   });
 });

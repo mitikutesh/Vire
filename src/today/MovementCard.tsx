@@ -18,6 +18,7 @@ export function MovementCard({
   onToggleDone,
   onAdd,
   onRemove,
+  readOnly = false,
 }: {
   exercise: Exercise;
   done: boolean;
@@ -25,6 +26,8 @@ export function MovementCard({
   onToggleDone: () => void;
   onAdd: (entry: Exercise) => void;
   onRemove: (index: number) => void;
+  /** A past day (I3): what happened is shown, but not offered for editing. */
+  readOnly?: boolean;
 }) {
   return (
     <section className="border-line bg-card flex flex-col gap-3 rounded-2xl border p-4">
@@ -39,33 +42,49 @@ export function MovementCard({
             <span className="text-sub font-normal">{t.today.movementKcal(exercise.k)}</span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onToggleDone}
-          aria-pressed={done}
-          className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold"
-          style={{
-            background: done ? 'var(--color-cloud)' : 'var(--color-paper)',
-            color: done ? '#fff' : 'var(--color-ink)',
-          }}
-        >
-          {done ? t.today.done : t.today.markDone}
-        </button>
+        {readOnly ? (
+          // A disabled button still invites a tap; on a closed day the state is
+          // simply a fact.
+          <span
+            className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold"
+            style={{
+              background: done ? 'var(--color-cloud)' : 'var(--color-paper)',
+              color: done ? '#fff' : 'var(--color-ink)',
+            }}
+          >
+            {done ? t.today.done : t.today.notDone}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onToggleDone}
+            aria-pressed={done}
+            className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold"
+            style={{
+              background: done ? 'var(--color-cloud)' : 'var(--color-paper)',
+              color: done ? '#fff' : 'var(--color-ink)',
+            }}
+          >
+            {done ? t.today.done : t.today.markDone}
+          </button>
+        )}
       </div>
 
-      <ul className="flex flex-wrap gap-2">
-        {QUICK_EX.map((quick) => (
-          <li key={quick.n}>
-            <button
-              type="button"
-              onClick={() => onAdd(quick)}
-              className="border-line bg-paper text-sub rounded-full border px-3 py-1 text-xs font-medium"
-            >
-              + {quick.n}
-            </button>
-          </li>
-        ))}
-      </ul>
+      {readOnly ? null : (
+        <ul className="flex flex-wrap gap-2">
+          {QUICK_EX.map((quick) => (
+            <li key={quick.n}>
+              <button
+                type="button"
+                onClick={() => onAdd(quick)}
+                className="border-line bg-paper text-sub rounded-full border px-3 py-1 text-xs font-medium"
+              >
+                + {quick.n}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {extra.length > 0 ? (
         <ul className="flex flex-col gap-1">
@@ -78,13 +97,15 @@ export function MovementCard({
               className="text-ink flex items-center justify-between text-sm"
             >
               <span>{t.today.exerciseRow(entry.n, entry.k)}</span>
-              <button
-                type="button"
-                aria-label={t.today.removeAria(entry.n)}
-                onClick={() => onRemove(i)}
-              >
-                <X size={15} className="text-sub" aria-hidden="true" />
-              </button>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  aria-label={t.today.removeAria(entry.n)}
+                  onClick={() => onRemove(i)}
+                >
+                  <X size={15} className="text-sub" aria-hidden="true" />
+                </button>
+              )}
             </li>
           ))}
         </ul>

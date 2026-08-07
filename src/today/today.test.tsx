@@ -6,6 +6,7 @@ import type { DailyLogHandle } from '@/data/useVireData';
 import { EX, QUICK_EX, SLOTS } from '@/content/plan';
 import { starterPlan } from '@/content/starter-plan';
 import { t } from '@/content/strings';
+import { addDays, dateKey } from '@/domain/clock';
 import { emptyLog } from '@/domain/log';
 import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import { TodayView } from './TodayView';
@@ -31,21 +32,46 @@ const PROFILE: Profile = {
 /** Wednesday: index 2, and not the Sunday rest day. */
 const WEDNESDAY = new Date('2026-08-12T12:00:00');
 
-/** The harness owns the log, so a tap really flows through `update` and back. */
-function Harness({ log: initial, profile }: { log: DailyLog; profile: Profile }) {
+/** The harness owns the log and the day offset, as the shell does. */
+function Harness({
+  log: initial,
+  profile,
+  offset: initialOffset,
+}: {
+  log: DailyLog;
+  profile: Profile;
+  offset: number;
+}) {
   const [log, setLog] = useState(initial);
+  const [offset, setOffset] = useState(initialOffset);
   const handle: DailyLogHandle = {
     log,
+    date: dateKey(addDays(WEDNESDAY, offset)),
     update: (change) => setLog((prev) => change(prev)),
     ready: true,
     saveFailed: false,
     dismissSaveError: () => {},
   };
-  return <TodayView profile={profile} plan={PLAN} log={handle} now={WEDNESDAY} />;
+  return (
+    <TodayView
+      profile={profile}
+      plan={PLAN}
+      log={handle}
+      viewedDate={addDays(WEDNESDAY, offset)}
+      dayOffset={offset}
+      onChangeOffset={(next) => setOffset(Math.min(0, next))}
+    />
+  );
 }
 
-function setup(options: { log?: DailyLog; profile?: Profile } = {}) {
-  render(<Harness log={options.log ?? emptyLog()} profile={options.profile ?? PROFILE} />);
+function setup(options: { log?: DailyLog; profile?: Profile; offset?: number } = {}) {
+  render(
+    <Harness
+      log={options.log ?? emptyLog()}
+      profile={options.profile ?? PROFILE}
+      offset={options.offset ?? 0}
+    />,
+  );
   return { user: userEvent.setup() };
 }
 
@@ -245,5 +271,73 @@ describe('extras', () => {
 
     expect(screen.queryByText(t.today.extraRow('Cake', 300))).not.toBeInTheDocument();
     expect(screen.getByText(t.today.eatenBurned(0, 0))).toBeInTheDocument();
+  });
+});
+
+describe('day navigation (I3)', () => {
+  it('starts on today, with the future unreachable', () => {
+    setup();
+    expect(screen.getByRole('button', { name: t.today.nextDayAria })).toBeDisabled();
+    expect(screen.queryByText(t.today.readOnly)).not.toBeInTheDocument();
+  });
+
+  it('steps back a day and says the day is closed', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: t.today.prevDayAria }));
+
+    expect(screen.getByText(t.today.readOnly)).toBeInTheDocument();
+    // Tuesday: the header follows the day, not just the log.
+    expect(screen.getByText(/Tuesday 11\.8\./)).toBeInTheDocument();
+  });
+
+  it('comes back to today in one tap', async () => {
+    const { user } = setup({ offset: -3 });
+    await user.click(screen.getByRole('button', { name: t.today.backToToday }));
+
+    expect(screen.queryByText(t.today.readOnly)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.today.nextDayAria })).toBeDisabled();
+  });
+
+  it('shows the plan for the day being viewed, not for today', async () => {
+    // A past Tuesday should show Tuesday's meals.
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: t.today.prevDayAria }));
+    expect(screen.getByText(PLAN.days[1].b.n)).toBeInTheDocument();
+  });
+});
+
+describe('a closed day', () => {
+  it('offers nothing to log', () => {
+    // Read-only rather than disabled controls: a disabled button still invites a
+    // tap, and on a closed day the state is simply a fact.
+    setup({ offset: -1, log: { ...emptyLog(), water: 5, ex: true } });
+
+    expect(screen.queryByRole('button', { name: t.today.markDone })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.today.waterMoreAria })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.today.extraAdd })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `+ ${QUICK_EX[0]!.n}` })).not.toBeInTheDocument();
+  });
+
+  it('still shows what happened', () => {
+    setup({
+      offset: -1,
+      log: { ...emptyLog(), water: 5, ex: true, extra: [{ n: 'Cake', k: 300 }] },
+    });
+
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '5');
+    expect(screen.getByText(t.today.done)).toBeInTheDocument();
+    expect(screen.getByText(t.today.extraRow('Cake', 300))).toBeInTheDocument();
+  });
+
+  it('does not offer to remove a logged row', () => {
+    setup({ offset: -1, log: { ...emptyLog(), extra: [{ n: 'Cake', k: 300 }] } });
+    expect(
+      screen.queryByRole('button', { name: t.today.removeAria('Cake') }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says "not done" rather than offering the action', () => {
+    setup({ offset: -1 });
+    expect(screen.getByText(t.today.notDone)).toBeInTheDocument();
   });
 });
