@@ -1,4 +1,4 @@
-import type { DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
+import type { DailyLog, Plan, Profile, StoredPlan, WeightEntry } from '@/domain/schema';
 import type { StoreTag } from '@/domain/constants';
 import type { UserId } from './keys';
 
@@ -25,10 +25,9 @@ export interface OfferScan {
   note: string;
 }
 
-export interface StoredPlan extends Plan {
-  /** Server-assigned. Grocery state and offer caches are scoped to it. */
-  planId: string;
-}
+// StoredPlan lives in @/domain/schema: it is a wire shape the client reads too,
+// and one declaration is the only way the two stay in agreement.
+export type { StoredPlan };
 
 export interface DatedWeight extends WeightEntry {
   date: string;

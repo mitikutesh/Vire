@@ -188,7 +188,24 @@ export const t = {
     generatingNote: 'Cooking up your week — the grocery list assembles itself right after.',
     error:
       "Some days didn't come back right — it happens. Try again, or start from the built-in plan.",
+    // The write failed after every day generated. Retrying is genuinely likely
+    // to work, so the copy says so rather than blaming the meals.
+    errorNotSaved: 'Your week came out fine but it did not save. Try again.',
+    // Distinct from the generic error: retrying immediately is the right move,
+    // because nothing about the plan was wrong.
+    errorDropped: 'The connection dropped mid-plan. Nothing was lost — try again.',
+    errorRateLimited:
+      "That's a lot of plans for one day. Try again tomorrow, or start from the built-in plan.",
     retry: 'Try again',
+
+    // Screen-reader wording for the seven day rows: the icons alone say nothing.
+    dayStatus: {
+      wait: 'waiting',
+      run: 'generating',
+      done: 'ready',
+      fail: 'failed',
+    },
+    progress: (done: number, total: number) => `${done} of ${total} days ready`,
   },
 
   now: {

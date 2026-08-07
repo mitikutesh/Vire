@@ -278,7 +278,15 @@ multi-week planning, calorie photo estimation.
   Cognito calls and owning token refresh; that is a real cost and not worth
   paying until it binds. After the profile screen (E1.2): **442 KB raw / 132 KB
   gzipped** — two thirds of the gzipped budget spent before a single real view
-  exists, so the CI check should land sooner than M5 rather than later. Fonts
+  exists, so the CI check should land sooner than M5 rather than later. After the
+  plan gate (E2.3): **440 KB raw / 131 KB gzipped** — flat, because the screen
+  it added is small and the shell stopped carrying the starter week as a fixture.
+  One lever found while measuring, for the E5.4 budget check: the curated starter
+  week (7 days plus 67 grocery rows) is **still in the production bundle**, pulled
+  in by `MemoryVireApi` via the static import in `api/client.ts`, even though
+  production never uses either — the server builds the starter plan and sends it
+  over the wire. Making the fake a dynamic import would drop both, at the cost of
+  an async `createVireApi`. Fonts
   self-hosted (Bricolage Grotesque + Instrument
   Sans via Fontsource — no Google Fonts request, no wordmark FOUT); plan
   generation P95 < 45 s with streamed per-day progress (Lambda ceiling 15 min,

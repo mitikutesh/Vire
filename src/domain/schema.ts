@@ -83,6 +83,19 @@ export const planSchema = z.object({
 });
 export type Plan = z.infer<typeof planSchema>;
 
+/**
+ * A plan as the server stored it.
+ *
+ * A plain interface rather than a schema extension on purpose: the client needs
+ * this type, and importing a Zod schema as a *value* from browser code would pull
+ * Zod back into the bundle (~55 KB) for a field the server assigns and the client
+ * only ever passes back.
+ */
+export interface StoredPlan extends Plan {
+  /** Server-assigned. Grocery state and offer caches are scoped to it. */
+  planId: string;
+}
+
 /* ───────────────────────────── profile ───────────────────────────── */
 
 export const sexSchema = z.enum(['f', 'm']);

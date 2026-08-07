@@ -24,6 +24,14 @@ const savedProfile: Profile = {
   timezone: 'Europe/Helsinki',
 };
 
+/**
+ * The in-memory API with one method replaced. Built on the real fake rather than
+ * a bare object literal so adding a method to the port does not break every stub
+ * that never cared about it.
+ */
+const apiWith = (overrides: Partial<VireApi>): VireApi =>
+  Object.assign(new MemoryVireApi(), overrides);
+
 function setup(
   options: {
     profile?: Profile | null;
@@ -229,14 +237,13 @@ describe('saving', () => {
   });
 
   it('marks the offending field when the server rejects a value', async () => {
-    const rejecting: VireApi = {
-      getProfile: async () => null,
+    const rejecting = apiWith({
       saveProfile: async () => {
         throw new ApiError(422, 'invalid_profile', [
           { field: 'w', message: 'Number must be greater than or equal to 30' },
         ]);
       },
-    };
+    });
     const { onSaved, user } = setup({ profile: null, api: rejecting });
     await user.click(screen.getByRole('button', { name: t.settings.saveFirstRun }));
 
@@ -246,12 +253,11 @@ describe('saving', () => {
   });
 
   it('reports a failure the user can retry rather than losing their entries', async () => {
-    const failing: VireApi = {
-      getProfile: async () => null,
+    const failing = apiWith({
       saveProfile: async () => {
         throw new ApiError(0, 'network');
       },
-    };
+    });
     const { user } = setup({ profile: null, api: failing });
     await user.type(screen.getByLabelText(t.settings.name), 'Aino');
     await user.click(screen.getByRole('button', { name: t.settings.saveFirstRun }));

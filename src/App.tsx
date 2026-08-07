@@ -6,10 +6,10 @@ import { createAuthClient, googleSignInAvailable } from '@/auth/client';
 import { useAuthSession } from '@/auth/useAuthSession';
 import type { AuthClient } from '@/auth/types';
 import { GROC_CATS } from '@/domain/constants';
-import type { DailyLog, Profile, SlotKey, Swap } from '@/domain/schema';
+import type { DailyLog, Profile, SlotKey, StoredPlan, Swap } from '@/domain/schema';
 import { EX, SLOTS } from '@/content/plan';
 import { DAY_NAMES, SLOT_LABEL, t } from '@/content/strings';
-import { STARTER_DAYS, STARTER_GROC } from '@/content/starter-plan';
+import { PlanGate } from '@/plan/PlanGate';
 import { getSlotKey, hourOf, weekdayIdx } from '@/domain/clock';
 import { burnedKcal, eatenKcal, emptyLog, remainingKcal } from '@/domain/log';
 import { AppShell } from '@/ui/AppShell';
@@ -20,12 +20,11 @@ import type { Tab } from '@/ui/BottomNav';
 import { SettingsView } from '@/settings/SettingsView';
 
 /**
- * M0 shell: every tab rendered from the starter plan so the locked design and
- * the UI kit can be checked end to end before any backend exists.
+ * M0 shell, now reading the user's real plan.
  *
- * The real views arrive with their own stories — Week in E2.4, Now and Today in
- * E3.2/E3.3, Shop in E4.1 — along with live data, the 30-second clock tick and
- * day rollover. State here is deliberately local and throwaway.
+ * The tabs themselves arrive with their own stories — Week in E2.4, Now and Today
+ * in E3.2/E3.3, Shop in E4.1 — along with the 30-second clock tick and day
+ * rollover. The log state here is still local and throwaway (E3.1).
  */
 /**
  * `auth` and `api` are injectable so tests can start from a signed-in session
@@ -59,9 +58,11 @@ export default function App({
 }
 
 /**
- * Signed in. The profile gates everything else: without one there is no calorie
- * target, so first-run setup comes before the tabs. The plan gate (E2.3) slots in
- * next, between the profile and the shell.
+ * Signed in, and two gates deep.
+ *
+ * The profile comes first: without one there is no calorie target, and nothing
+ * downstream has a number to work from. The plan comes second: the tabs all
+ * render a week, so there is nothing to show until one exists.
  */
 function SignedInApp({
   auth,
@@ -74,7 +75,8 @@ function SignedInApp({
 }) {
   const api = useMemo(() => injectedApi ?? createVireApi(auth), [injectedApi, auth]);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [plan, setPlan] = useState<StoredPlan | null>(null);
+  const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -82,13 +84,20 @@ function SignedInApp({
     void (async () => {
       try {
         const loaded = await api.getProfile();
-        if (!cancelled) setProfile(loaded);
+        if (cancelled) return;
+        setProfile(loaded);
+        // Only worth asking once there is a profile: generation needs one, so a
+        // user without a profile cannot have a plan.
+        if (loaded) {
+          const week = await api.getPlan();
+          if (!cancelled) setPlan(week);
+        }
       } catch (error) {
-        // Treated as first-run rather than a dead end: the form is the only way
-        // forward, and it will surface a save failure of its own.
-        console.error('[vire] Could not load the profile', error);
+        // Treated as first-run rather than a dead end: the gates ahead are the
+        // only way forward, and each surfaces its own failure.
+        console.error('[vire] Could not load the profile or plan', error);
       } finally {
-        if (!cancelled) setLoadingProfile(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -96,7 +105,7 @@ function SignedInApp({
     };
   }, [api]);
 
-  if (loadingProfile) {
+  if (loading) {
     return (
       <div className="bg-paper flex min-h-screen items-center justify-center">
         <p className="disp text-cloud font-bold" style={{ fontSize: 20 }}>
@@ -111,9 +120,13 @@ function SignedInApp({
     return <SettingsView api={api} profile={null} onSaved={setProfile} onSignOut={onSignOut} />;
   }
 
+  if (!plan) {
+    return <PlanGate api={api} profile={profile} onPlan={setPlan} />;
+  }
+
   return (
     <>
-      <FixtureShell profile={profile} onOpenSettings={() => setSettingsOpen(true)} />
+      <FixtureShell profile={profile} plan={plan} onOpenSettings={() => setSettingsOpen(true)} />
       {settingsOpen ? (
         <SettingsView
           api={api}
@@ -131,14 +144,16 @@ function SignedInApp({
 }
 
 /**
- * The M0 fixture shell, now reading the real target from the saved profile. The
+ * The M0 shell, reading the saved profile's target and the user's own plan. The
  * live views arrive with their own stories (E2.4, E3.2, E3.3, E4.1).
  */
 function FixtureShell({
   profile,
+  plan,
   onOpenSettings,
 }: {
   profile: Profile;
+  plan: StoredPlan;
   onOpenSettings: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('now');
@@ -146,7 +161,7 @@ function FixtureShell({
 
   const now = useMemo(() => new Date(), []);
   const wd = weekdayIdx(now);
-  const day = STARTER_DAYS[wd];
+  const day = plan.days[wd];
   const nowHour = hourOf(now);
   const nowSlot = getSlotKey(nowHour);
 
@@ -246,7 +261,7 @@ function FixtureShell({
           </h1>
 
           <ul className="flex flex-col gap-2">
-            {STARTER_DAYS.map((d, i) => {
+            {plan.days.map((d, i) => {
               const total = SLOTS.reduce((sum, slot) => sum + d[slot].k, 0);
               return (
                 <li
@@ -280,7 +295,7 @@ function FixtureShell({
           </h1>
 
           {GROC_CATS.map((cat) => {
-            const items = STARTER_GROC.filter((item) => item.cat === cat);
+            const items = plan.groc.filter((item) => item.cat === cat);
             if (items.length === 0) return null;
             return (
               <div key={cat} className="flex flex-col gap-1">

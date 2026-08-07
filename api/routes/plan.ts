@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import type { WeekdayIndex } from '@/domain/constants';
+import { WEEKDAYS } from '@/domain/constants';
+import type { PlanStreamEvent, ReportedDayState } from '@/domain/plan-stream';
 import { aggregateItems } from '@/domain/aggregate-items';
 import type { DayPlan, Plan } from '@/domain/schema';
 import { UnauthorizedError, userIdFromClaims } from '../auth/identity';
@@ -39,12 +40,8 @@ export const RETRY_DELAY_MS = 1_500;
 const sleep = (ms: number): Promise<void> =>
   ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 
-const WEEKDAYS: readonly WeekdayIndex[] = [0, 1, 2, 3, 4, 5, 6];
-
 /** Server-side UTC day, for the rate-limit counter only. */
 const rateLimitDay = (now: Date): string => now.toISOString().slice(0, 10);
-
-export type DayState = 'run' | 'done' | 'fail';
 
 export interface PlanRouteDeps {
   store: VireStore;
@@ -63,7 +60,7 @@ export interface PlanRouteDeps {
 async function generateDayWithRetry(
   provider: AiProvider,
   config: Parameters<AiProvider['generateDay']>[0],
-  onState: (state: DayState) => Promise<void>,
+  onState: (state: ReportedDayState) => Promise<void>,
   retryDelayMs: number,
 ): Promise<GeneratedDay | null> {
   await onState('run');
@@ -123,7 +120,9 @@ export function planRoutes({
     // Progress is streamed, so the response has already started by the time a
     // day fails — which is why failures are stream events rather than statuses.
     return streamSSE(c, async (stream) => {
-      const send = (data: unknown) => stream.writeSSE({ data: JSON.stringify(data) });
+      // Typed against the shared contract, so an event shape the plan gate
+      // cannot parse is a type error rather than a silent no-op in the browser.
+      const send = (event: PlanStreamEvent) => stream.writeSSE({ data: JSON.stringify(event) });
 
       const results = await Promise.all(
         WEEKDAYS.map((weekday) =>

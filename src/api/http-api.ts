@@ -1,5 +1,15 @@
-import type { Profile } from '@/domain/schema';
-import { ApiError, type FieldIssue, type ProfileInput, type VireApi } from './types';
+import type { WeekdayIndex } from '@/domain/constants';
+import { dataOf, parsePlanEvent, takeFrames } from '@/domain/plan-stream';
+import type { ReportedDayState } from '@/domain/plan-stream';
+import type { Profile, StoredPlan } from '@/domain/schema';
+import {
+  ApiError,
+  PlanGenerationError,
+  type FieldIssue,
+  type PlanFailure,
+  type ProfileInput,
+  type VireApi,
+} from './types';
 
 /**
  * The real API client.
@@ -72,5 +82,72 @@ export class HttpVireApi implements VireApi {
     if (!response.ok) return HttpVireApi.fail(response);
     // The server's copy, including the target it computed.
     return (await response.json()) as Profile;
+  }
+
+  async getPlan(): Promise<StoredPlan | null> {
+    const response = await this.request('/plan');
+    if (response.status === 404) return null;
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as StoredPlan;
+  }
+
+  async adoptStarterPlan(): Promise<StoredPlan> {
+    const response = await this.request('/plan/starter', { method: 'POST' });
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as StoredPlan;
+  }
+
+  async generatePlan(
+    onDay: (day: WeekdayIndex, state: ReportedDayState) => void,
+  ): Promise<StoredPlan> {
+    const response = await this.request('/plan/generate', { method: 'POST' });
+    // A refusal (no profile, rate limit) arrives as a status before the stream
+    // starts, so it is an ApiError like any other request.
+    if (!response.ok) return HttpVireApi.fail(response);
+    if (!response.body) throw new ApiError(0, 'network');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let plan: StoredPlan | null = null;
+    let failure: PlanFailure | null = null;
+    let failedDays: readonly number[] = [];
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        // `stream: true` matters: a multi-byte character can straddle a chunk,
+        // and the decoder holds the partial sequence until the rest arrives.
+        buffer += decoder.decode(value, { stream: !done });
+        const { frames, rest } = takeFrames(buffer);
+        buffer = rest;
+
+        for (const frame of frames) {
+          const event = parsePlanEvent(dataOf(frame));
+          if (!event) continue;
+          if (event.type === 'day') onDay(event.day, event.state);
+          else if (event.type === 'plan') plan = event.plan;
+          else {
+            failure = event.error;
+            if (event.error === 'partial') failedDays = event.failedDays;
+          }
+        }
+        if (done) break;
+      }
+    } finally {
+      // Releasing the lock lets the connection be reused, and matters most on
+      // the paths that leave the stream early.
+      reader.releaseLock();
+    }
+
+    if (plan) return plan;
+    if (failure) throw new PlanGenerationError(failure, failedDays);
+
+    // The stream ended without a verdict. The plan may still have been stored
+    // just before the connection dropped, so ask before charging the user for a
+    // second generation.
+    const stored = await this.getPlan().catch(() => null);
+    if (stored) return stored;
+    throw new PlanGenerationError('dropped');
   }
 }

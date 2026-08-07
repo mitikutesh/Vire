@@ -31,6 +31,11 @@ test('the built app boots, onboards, and renders the four-tab shell', async ({ p
   await expect(page.getByText(/Mifflin-St Jeor/)).toBeVisible(); // guardrail 2
   await page.getByRole('button', { name: 'Save and continue' }).click();
 
+  // Second gate: every tab renders a week, so one has to exist first. The
+  // starter path is taken here because it needs no provider and no key.
+  await expect(page.getByRole('heading', { name: 'No plan for this week yet' })).toBeVisible();
+  await page.getByRole('button', { name: /built-in Finnish starter plan/ }).click();
+
   // Now the shell itself: all four destinations, and real plan content.
   for (const tab of ['Now', 'Today', 'Week', 'Shop']) {
     await expect(page.getByRole('button', { name: tab })).toBeVisible();

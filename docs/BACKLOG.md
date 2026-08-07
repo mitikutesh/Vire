@@ -2,9 +2,10 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestone M0 is complete**, plus both M1 stories and the first three of M2.
-332 unit tests and an end-to-end onboarding test in real WebKit; lint, typecheck,
-format and the static build are clean; one commit per story.
+**Milestone M0 is complete**, plus both M1 stories and four of M2's five. 368 unit
+tests and an end-to-end test in real WebKit that walks sign-up, the profile form
+and the plan gate into the shell; lint, typecheck, format and the static build are
+clean; one commit per story.
 
 | Story                             | State      | Note                                                                                          |
 | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
@@ -19,8 +20,8 @@ format and the static build are clean; one commit per story.
 | E1.1 Auth flows & invite-only     | ✅ done    | Port + fake tested; Cognito adapter unverified                                                |
 | E1.2 Profile & settings           | ✅ done    | Target computed server-side; dialog focus-trapped                                             |
 | E1.3 Google sign-in infra         | 🔒 blocked | Needs a Google Cloud OAuth client from the owner                                              |
-| E2.1 Generation API               | ✅ done    | Streamed, per-day retry with backoff, 10/day limit; P95 unmeasured until deploy                |
-| E2.2 Plan activation transaction  | ✅ done    | Store helper from E0.6, exercised by the generate and starter routes                            |
+| E2.1 Generation API               | ✅ done    | Streamed, per-day retry with backoff, 10/day limit; P95 unmeasured until deploy               |
+| E2.2 Plan activation transaction  | ✅ done    | Store helper from E0.6, exercised by the generate and starter routes                          |
 | E2.3 → E5.4                       | ⬜ next    | Implementable locally; see below                                                              |
 | E6.1 → E6.4 (iOS)                 | 🔒 blocked | Needs Xcode, an Apple Developer account and a device/TestFlight                               |
 | E7.5 Kesko API                    | ❌ closed  | Portal admits only Azure AD identities Kesko onboards — no route for an individual (PLAN §12) |
@@ -257,6 +258,22 @@ nothing is worse than no button.
 - AC: starter plan path stores STARTER + STARTER_GROC as the active plan
   (`starter: true`).
 - Parity: Plan gate (all).
+- Done: `src/plan/PlanGate.tsx`, plus the streaming half of the API client. The
+  SSE contract lives in `src/domain/plan-stream.ts` so the route and the gate
+  share one declaration — an event shape the client cannot parse is now a
+  compile error in the route.
+- Deviation from the AC, deliberate: **no idempotent request id.** A dropped
+  stream is recovered by asking `GET /plan` before concluding failure — if the
+  plan was stored just before the connection died, the client adopts it. That
+  covers the failure the request id was for (paying twice for one week) with one
+  cheap GET instead of server-side request bookkeeping. A drop _before_ the write
+  still regenerates, which is correct.
+- Beyond the AC: four distinct failure messages, because the reason changes the
+  advice — bad days, a failed write, a dropped connection, and a spent daily
+  allowance. And the two gates now sequence properly: no profile → setup, no plan
+  → gate, both → shell, covered end to end in real WebKit.
+- The shell reads the user's own plan rather than the starter fixture, so the
+  hardcoded `STARTER_DAYS` / `STARTER_GROC` shim is gone from `App.tsx`.
 
 ### E2.4 — Week view + regenerate (M)
 

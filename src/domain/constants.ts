@@ -26,3 +26,6 @@ export type StoreTag = (typeof STORE_TAGS)[number];
 
 /** A weekday index, Monday = 0 — matches `weekdayIdx`. */
 export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** Every weekday in order, for iterating a week. */
+export const WEEKDAYS: readonly WeekdayIndex[] = [0, 1, 2, 3, 4, 5, 6];

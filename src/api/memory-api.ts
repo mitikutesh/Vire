@@ -1,7 +1,10 @@
+import { WEEKDAYS, type WeekdayIndex } from '@/domain/constants';
+import type { ReportedDayState } from '@/domain/plan-stream';
 import { profileSchema } from '@/domain/schema';
-import type { Profile } from '@/domain/schema';
+import type { Profile, StoredPlan } from '@/domain/schema';
 import { calcTarget } from '@/domain/target';
-import { ApiError, type ProfileInput, type VireApi } from './types';
+import { starterPlan } from '@/content/starter-plan';
+import { ApiError, PlanGenerationError, type ProfileInput, type VireApi } from './types';
 
 /**
  * In-memory API, for tests and for `npm run dev` before a Lambda exists.
@@ -9,12 +12,25 @@ import { ApiError, type ProfileInput, type VireApi } from './types';
  * It computes the target with the *same* `calcTarget` the route uses, so the
  * floors behave identically here and in production — the point of the fake is to
  * remove the network, not to reimplement the rules.
+ *
+ * Generation returns the starter week's days, since there is no provider here.
+ * It is marked `starter: false` because it stands in for a generated plan, and
+ * the views branch on that flag.
  */
+export interface MemoryApiOptions {
+  /** Days to fail, so the plan gate's error path can be driven in a test. */
+  failDays?: readonly WeekdayIndex[];
+}
+
 export class MemoryVireApi implements VireApi {
   private profile: Profile | null;
+  private plan: StoredPlan | null = null;
+  private planCount = 0;
+  private readonly failDays: readonly WeekdayIndex[];
 
-  constructor(profile: Profile | null = null) {
+  constructor(profile: Profile | null = null, options: MemoryApiOptions = {}) {
     this.profile = profile;
+    this.failDays = options.failDays ?? [];
   }
 
   async getProfile(): Promise<Profile | null> {
@@ -39,5 +55,35 @@ export class MemoryVireApi implements VireApi {
 
     this.profile = parsed.data;
     return structuredClone(parsed.data);
+  }
+
+  async getPlan(): Promise<StoredPlan | null> {
+    return this.plan ? structuredClone(this.plan) : null;
+  }
+
+  async generatePlan(
+    onDay: (day: WeekdayIndex, state: ReportedDayState) => void,
+  ): Promise<StoredPlan> {
+    if (!this.profile) throw new ApiError(409, 'no_profile');
+
+    for (const day of WEEKDAYS) onDay(day, 'run');
+    // A microtask gap, so a caller that renders between events actually gets a
+    // chance to — otherwise the seven rows would appear already finished.
+    await Promise.resolve();
+    for (const day of WEEKDAYS) onDay(day, this.failDays.includes(day) ? 'fail' : 'done');
+
+    if (this.failDays.length > 0) throw new PlanGenerationError('partial', [...this.failDays]);
+
+    return this.activate({ ...starterPlan(Date.now()), starter: false });
+  }
+
+  async adoptStarterPlan(): Promise<StoredPlan> {
+    return this.activate(starterPlan(Date.now()));
+  }
+
+  private activate(plan: Omit<StoredPlan, 'planId'>): StoredPlan {
+    this.planCount += 1;
+    this.plan = { ...plan, planId: `plan-memory-${this.planCount}` };
+    return structuredClone(this.plan);
   }
 }

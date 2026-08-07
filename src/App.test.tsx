@@ -26,13 +26,20 @@ const PROFILE: Profile = {
 };
 
 /**
- * Render already signed in *and* already set up — the auth screen and the profile
- * form each have their own suite, so the shell tests should not have to walk
- * through both first.
+ * An API that already holds a profile and an active plan, so the shell tests do
+ * not have to walk the auth screen, the profile form and the plan gate first —
+ * each has its own suite. The plan is adopted through the real method rather than
+ * injected, so the fake cannot drift from the flow it stands in for.
  */
-async function renderSignedIn() {
-  render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi(PROFILE)} />);
-  // A splash shows while the session and profile load.
+async function readyApi(profile: Profile = PROFILE) {
+  const api = new MemoryVireApi(profile);
+  await api.adoptStarterPlan();
+  return api;
+}
+
+async function renderSignedIn(profile: Profile = PROFILE) {
+  render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={await readyApi(profile)} />);
+  // A splash shows while the session, profile and plan load.
   await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
 }
 
@@ -74,7 +81,7 @@ describe('first-run gate', () => {
     expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
   });
 
-  it('enters the app once the profile is saved', async () => {
+  it('moves on to the plan gate once the profile is saved', async () => {
     const user = userEvent.setup();
     render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi()} />);
     await waitFor(() =>
@@ -82,6 +89,52 @@ describe('first-run gate', () => {
     );
 
     await user.click(screen.getByRole('button', { name: t.settings.saveFirstRun }));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.planGate.title })).toBeInTheDocument(),
+    );
+  });
+});
+
+describe('plan gate', () => {
+  it('stops a user with a profile but no plan before the tabs', async () => {
+    // Every tab renders a week; there is nothing to show until one exists.
+    render(
+      <App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi(PROFILE)} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.planGate.title })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
+  });
+
+  it('enters the app once a plan exists', async () => {
+    const user = userEvent.setup();
+    render(
+      <App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi(PROFILE)} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.planGate.title })).toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: t.planGate.generate }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
+  });
+
+  it('walks the whole first run: no profile, no plan, then the app', async () => {
+    // The two gates in sequence, which is what a new user actually meets.
+    const user = userEvent.setup();
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi()} />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.settings.firstRunTitle })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: t.settings.saveFirstRun }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.planGate.title })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: t.planGate.starter(false) }));
+
     await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
   });
 });
@@ -99,20 +152,14 @@ describe('settings from the shell', () => {
   });
 
   it('uses the saved target, not a hardcoded one', async () => {
-    render(
-      <App
-        auth={new FakeAuthClient({ signedInAs: OWNER })}
-        api={new MemoryVireApi({ ...PROFILE, target: 1850 })}
-      />,
-    );
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
+    await renderSignedIn({ ...PROFILE, target: 1850 });
     expect(screen.getByText(t.now.ofTarget(1850))).toBeInTheDocument();
   });
 });
 
 /**
- * The M0 demo criterion: the locked design renders all four tabs from the
- * starter plan, before any backend exists (E0.5).
+ * The M0 demo criterion: the locked design renders all four tabs — now from the
+ * user's own active plan rather than a hardcoded fixture.
  */
 describe('App shell', () => {
   beforeEach(async () => {
@@ -123,7 +170,7 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: 'Now' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('renders every tab from the starter plan', async () => {
+  it('renders every tab from the active plan', async () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Today' }));
