@@ -2,10 +2,11 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestone M0 is complete**, plus both M1 stories and four of M2's five. 368 unit
-tests and an end-to-end test in real WebKit that walks sign-up, the profile form
-and the plan gate into the shell; lint, typecheck, format and the static build are
-clean; one commit per story.
+**Milestones M0, M1 and M2 are complete.** 383 unit tests and an end-to-end test in
+real WebKit that walks sign-up, the profile form and the plan gate into the shell
+and expands a day in the Week tab; lint, typecheck, format and the static build are
+clean; one commit per story. Nothing has run against AWS yet — see the owner
+actions below.
 
 | Story                             | State      | Note                                                                                          |
 | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
@@ -282,6 +283,18 @@ nothing is worse than no button.
 - AC: regenerate in Settings keeps the two-tap berry confirm and warning copy,
   then routes through E2.2.
 - Parity: Week (all except I1 trend → E3.4); Settings (regenerate).
+- Done: `src/week/WeekView.tsx` and the plan section in Settings. The cards are a
+  real disclosure pattern (`aria-expanded` + `aria-controls`), one open at a
+  time — two open panels in a phone-width column turn the tab into a scroll hunt.
+- Beyond the AC: regenerate does **not** silently replace the week. It routes to
+  the plan gate with regenerate-specific copy and a "Keep my current week" way
+  back, and the stored plan is left alone until a new one is activated. The
+  prototype regenerated immediately, which meant a failure left the user with
+  nothing; here a failure, or second thoughts, restores the existing week.
+- Deliberately not auto-started: the gate could begin generating the moment it
+  opens, but StrictMode double-invokes effects in development, which would spend
+  two slices of the daily allowance per attempt. One tap on a screen that states
+  what is about to happen is the better trade.
 
 ---
 

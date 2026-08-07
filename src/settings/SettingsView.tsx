@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, LogOut, X } from 'lucide-react';
+import { Loader2, LogOut, Sparkles, X } from 'lucide-react';
 import { ApiError, type ProfileInput, type VireApi } from '@/api/types';
 import { ACTIVITY_LEVELS, CITIES, PACE_LEVELS, WATER } from '@/content/plan';
 import { t } from '@/content/strings';
@@ -44,10 +44,19 @@ interface SettingsViewProps {
   onSaved: (profile: Profile) => void;
   /** Absent on first run, which makes the dialog non-dismissible. */
   onClose?: () => void;
+  /** Absent on first run, when there is no plan to replace. */
+  onRegenerate?: (() => void) | undefined;
   onSignOut: () => void;
 }
 
-export function SettingsView({ api, profile, onSaved, onClose, onSignOut }: SettingsViewProps) {
+export function SettingsView({
+  api,
+  profile,
+  onSaved,
+  onClose,
+  onRegenerate,
+  onSignOut,
+}: SettingsViewProps) {
   const firstRun = profile === null;
   const [form, setForm] = useState<ProfileInput>(() => {
     if (!profile) return DEFAULT_PROFILE;
@@ -57,6 +66,9 @@ export function SettingsView({ api, profile, onSaved, onClose, onSignOut }: Sett
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  // Two taps, because regenerating throws away the current week's meals, the
+  // grocery list and whatever is already ticked off on it.
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   const set = <K extends keyof ProfileInput>(key: K, value: ProfileInput[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -200,6 +212,32 @@ export function SettingsView({ api, profile, onSaved, onClose, onSignOut }: Sett
           <p className="text-sub mt-1 text-xs">{t.settings.onTheWay(form.w, form.goalW)}</p>
         ) : null}
       </section>
+
+      {onRegenerate ? (
+        <section className="border-line bg-card flex flex-col gap-3 rounded-2xl border p-4">
+          <h2 className="disp text-ink font-bold" style={{ fontSize: 17 }}>
+            {t.settings.planSection}
+          </h2>
+          <p className="text-sub text-sm">{t.settings.planBlurb}</p>
+          <button
+            type="button"
+            onClick={() => (confirmRegen ? onRegenerate() : setConfirmRegen(true))}
+            disabled={busy}
+            className="flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold text-white"
+            // Berry on the confirm tap: the same destructive signal the rest of
+            // the app uses, and the only place a button is not ink.
+            style={{ background: confirmRegen ? C.berry : C.ink }}
+          >
+            <Sparkles size={15} aria-hidden="true" />
+            {confirmRegen ? t.settings.regenerateConfirm : t.settings.regenerate}
+          </button>
+          {confirmRegen ? (
+            <p role="alert" className="text-berry text-xs font-medium">
+              {t.settings.regenerateWarning}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-berry text-sm font-medium">

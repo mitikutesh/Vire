@@ -7,9 +7,10 @@ import { useAuthSession } from '@/auth/useAuthSession';
 import type { AuthClient } from '@/auth/types';
 import { GROC_CATS } from '@/domain/constants';
 import type { DailyLog, Profile, SlotKey, StoredPlan, Swap } from '@/domain/schema';
-import { EX, SLOTS } from '@/content/plan';
+import { SLOTS } from '@/content/plan';
 import { DAY_NAMES, SLOT_LABEL, t } from '@/content/strings';
 import { PlanGate } from '@/plan/PlanGate';
+import { WeekView } from '@/week/WeekView';
 import { getSlotKey, hourOf, weekdayIdx } from '@/domain/clock';
 import { burnedKcal, eatenKcal, emptyLog, remainingKcal } from '@/domain/log';
 import { AppShell } from '@/ui/AppShell';
@@ -78,6 +79,12 @@ function SignedInApp({
   const [plan, setPlan] = useState<StoredPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * Regenerating: the gate is showing, but the stored plan is still there and
+   * still good. Kept separate from `plan` so backing out restores the week
+   * instead of stranding the user — the server was never told to delete anything.
+   */
+  const [replacingPlan, setReplacingPlan] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,8 +127,18 @@ function SignedInApp({
     return <SettingsView api={api} profile={null} onSaved={setProfile} onSignOut={onSignOut} />;
   }
 
-  if (!plan) {
-    return <PlanGate api={api} profile={profile} onPlan={setPlan} />;
+  if (!plan || replacingPlan) {
+    return (
+      <PlanGate
+        api={api}
+        profile={profile}
+        onPlan={(week) => {
+          setPlan(week);
+          setReplacingPlan(false);
+        }}
+        {...(plan ? { onKeepCurrent: () => setReplacingPlan(false) } : {})}
+      />
+    );
   }
 
   return (
@@ -136,6 +153,10 @@ function SignedInApp({
             setSettingsOpen(false);
           }}
           onClose={() => setSettingsOpen(false)}
+          onRegenerate={() => {
+            setSettingsOpen(false);
+            setReplacingPlan(true);
+          }}
           onSignOut={onSignOut}
         />
       ) : null}
@@ -253,39 +274,7 @@ function FixtureShell({
         </section>
       ) : null}
 
-      {tab === 'week' ? (
-        <section className="flex flex-col gap-4">
-          <p className="text-sub text-sm">{t.week.subtitle}</p>
-          <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
-            {t.week.title}
-          </h1>
-
-          <ul className="flex flex-col gap-2">
-            {plan.days.map((d, i) => {
-              const total = SLOTS.reduce((sum, slot) => sum + d[slot].k, 0);
-              return (
-                <li
-                  key={DAY_NAMES[i]}
-                  className="border-line bg-card flex items-center gap-3 rounded-2xl border p-4"
-                  style={i === wd ? { borderColor: 'var(--color-ink)' } : undefined}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="text-ink block truncate text-sm font-semibold">{d.d.n}</span>
-                    <span className="text-sub block text-xs">
-                      {total} kcal · {EX[i].n} {EX[i].min} min
-                    </span>
-                  </span>
-                  {i === wd ? (
-                    <span className="bg-cloud-soft text-cloud rounded-full px-2 py-1 text-xs font-bold uppercase">
-                      {t.week.todayBadge}
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
+      {tab === 'week' ? <WeekView plan={plan} today={wd} /> : null}
 
       {tab === 'shop' ? (
         <section className="flex flex-col gap-4">

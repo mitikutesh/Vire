@@ -40,6 +40,15 @@ test('the built app boots, onboards, and renders the four-tab shell', async ({ p
   for (const tab of ['Now', 'Today', 'Week', 'Shop']) {
     await expect(page.getByRole('button', { name: tab })).toBeVisible();
   }
+  // The Week tab opens on today and expands another day on tap — the one bit of
+  // real interaction in the shell so far.
+  await page.getByRole('button', { name: 'Week' }).click();
+  await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible();
+  const sunday = page.getByRole('button', { name: /Sunday/ });
+  await expect(sunday).toHaveAttribute('aria-expanded', 'false');
+  await sunday.click();
+  await expect(sunday).toHaveAttribute('aria-expanded', 'true');
+
   await page.getByRole('button', { name: 'Shop' }).click();
   await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
 

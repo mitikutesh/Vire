@@ -186,6 +186,12 @@ export const t = {
     starterAfterError: (hasAllergies: boolean) =>
       `Use the starter plan instead${hasAllergies ? ' (not adjusted for your allergies)' : ''}`,
     generatingNote: 'Cooking up your week — the grocery list assembles itself right after.',
+    // Regenerating rather than first run: the heading must not claim there is no
+    // plan, because there is one and it is about to be replaced.
+    replaceTitle: 'Swap in a fresh week',
+    replaceBlurb:
+      "Your current week stays put until the new one is ready — nothing is lost if this doesn't work out.",
+    keepCurrent: 'Keep my current week',
     error:
       "Some days didn't come back right — it happens. Try again, or start from the built-in plan.",
     // The write failed after every day generated. Retrying is genuinely likely

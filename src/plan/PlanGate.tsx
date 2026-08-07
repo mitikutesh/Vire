@@ -39,10 +39,18 @@ export function PlanGate({
   api,
   profile,
   onPlan,
+  onKeepCurrent,
 }: {
   api: VireApi;
   profile: Profile;
   onPlan: (plan: StoredPlan) => void;
+  /**
+   * Present only when a plan already exists, i.e. the user came here from
+   * Settings to regenerate. Without an escape, a regenerate that fails or is
+   * thought better of would leave them staring at a gate with a perfectly good
+   * week sitting on the server.
+   */
+  onKeepCurrent?: (() => void) | undefined;
 }) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [dayStates, setDayStates] = useState<DayState[]>(() => allDays('wait'));
@@ -111,6 +119,19 @@ export function PlanGate({
   };
 
   const doneCount = dayStates.filter((state) => state === 'done').length;
+  const replacing = onKeepCurrent !== undefined;
+
+  /** The way back to an existing week, on every screen that is not mid-request. */
+  const keepCurrent = onKeepCurrent ? (
+    <button
+      type="button"
+      onClick={onKeepCurrent}
+      disabled={busy}
+      className="text-sub text-sm font-medium underline-offset-2 hover:underline disabled:opacity-60"
+    >
+      {t.planGate.keepCurrent}
+    </button>
+  ) : null;
 
   return (
     <main className="bg-paper flex min-h-screen flex-col items-center gap-4 px-5 pt-10 text-center">
@@ -122,11 +143,12 @@ export function PlanGate({
       </span>
 
       <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
-        {t.planGate.title}
+        {replacing ? t.planGate.replaceTitle : t.planGate.title}
       </h1>
       <p className="text-sub max-w-xs text-sm">
         {t.planGate.blurb(hasAllergies ? allergies : null)}
       </p>
+      {replacing ? <p className="text-sub max-w-xs text-xs">{t.planGate.replaceBlurb}</p> : null}
 
       {phase === 'idle' ? (
         <>
@@ -146,6 +168,7 @@ export function PlanGate({
           >
             {t.planGate.starter(hasAllergies)}
           </button>
+          {keepCurrent}
         </>
       ) : null}
 
@@ -200,6 +223,7 @@ export function PlanGate({
           >
             {t.planGate.starterAfterError(hasAllergies)}
           </button>
+          {keepCurrent}
         </div>
       ) : null}
     </main>

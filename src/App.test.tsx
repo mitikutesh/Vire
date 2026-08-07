@@ -139,6 +139,89 @@ describe('plan gate', () => {
   });
 });
 
+describe('regenerating the week', () => {
+  const openRegenerate = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: t.app.settingsAria }));
+    return screen.getByRole('button', { name: new RegExp(t.settings.regenerate) });
+  };
+
+  it('is not offered on first run, when there is no week to replace', async () => {
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi()} />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.settings.firstRunTitle })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(t.settings.planSection)).not.toBeInTheDocument();
+  });
+
+  it('takes two taps, and warns on the first', async () => {
+    // It throws away the week's meals, the grocery list and everything ticked off.
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    const button = await openRegenerate(user);
+    await user.click(button);
+
+    expect(screen.getByText(t.settings.regenerateWarning)).toBeInTheDocument();
+    // Still in Settings: one tap changed nothing.
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: new RegExp(t.settings.regenerateConfirm) }),
+    ).toBeInTheDocument();
+  });
+
+  it('confirming opens the gate with the current week still available', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    const button = await openRegenerate(user);
+    await user.click(button);
+    await user.click(
+      screen.getByRole('button', { name: new RegExp(t.settings.regenerateConfirm) }),
+    );
+
+    // Not the first-run heading: there is a plan, and it is about to be replaced.
+    expect(screen.getByRole('heading', { name: t.planGate.replaceTitle })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.planGate.keepCurrent })).toBeInTheDocument();
+  });
+
+  it('backing out restores the existing week', async () => {
+    // The plan was never deleted server-side, so changing your mind must not
+    // strand you on the gate with a perfectly good week sitting on the server.
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    const button = await openRegenerate(user);
+    await user.click(button);
+    await user.click(
+      screen.getByRole('button', { name: new RegExp(t.settings.regenerateConfirm) }),
+    );
+    await user.click(screen.getByRole('button', { name: t.planGate.keepCurrent }));
+
+    expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument();
+  });
+
+  it('replaces the week when a new one is generated', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    // The starter week says so in the Week tab's average note; a generated one
+    // says it was made for the profile. That is the visible difference.
+    await user.click(screen.getByRole('button', { name: 'Week' }));
+    expect(screen.getByText(/from the built-in Finnish starter plan/)).toBeInTheDocument();
+
+    const button = await openRegenerate(user);
+    await user.click(button);
+    await user.click(
+      screen.getByRole('button', { name: new RegExp(t.settings.regenerateConfirm) }),
+    );
+    await user.click(screen.getByRole('button', { name: t.planGate.generate }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Week' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Week' }));
+    expect(screen.getByText(/generated for your profile/)).toBeInTheDocument();
+  });
+});
+
 describe('settings from the shell', () => {
   it('opens on the gear and closes again', async () => {
     const user = userEvent.setup();
