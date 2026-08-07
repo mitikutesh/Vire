@@ -1,4 +1,8 @@
 import { useMemo, useState } from 'react';
+import { AuthView } from '@/auth/AuthView';
+import { createAuthClient } from '@/auth/client';
+import { useAuthSession } from '@/auth/useAuthSession';
+import type { AuthClient } from '@/auth/types';
 import { GROC_CATS } from '@/domain/constants';
 import type { DailyLog, SlotKey, Swap } from '@/domain/schema';
 import { EX, SLOTS } from '@/content/plan';
@@ -22,7 +26,36 @@ import type { Tab } from '@/ui/BottomNav';
  */
 const FIXTURE_TARGET = 1600;
 
-export default function App() {
+/** `auth` is injectable so tests can start from a signed-in session. */
+export default function App({ auth: injected }: { auth?: AuthClient } = {}) {
+  // One client for the app's lifetime: rebuilding it would reconfigure Amplify
+  // and drop the session on every render.
+  const auth = useMemo(() => injected ?? createAuthClient(), [injected]);
+  const { state, onAuthed, signOut } = useAuthSession(auth);
+
+  if (state.status === 'loading') {
+    // The wordmark splash, so a restored session never flashes the sign-in form.
+    return (
+      <div className="bg-paper flex min-h-screen items-center justify-center">
+        <p className="disp text-cloud font-bold" style={{ fontSize: 20 }}>
+          {t.loading.splash}
+        </p>
+      </div>
+    );
+  }
+
+  if (state.status === 'signedOut') {
+    return <AuthView auth={auth} onAuthed={onAuthed} />;
+  }
+
+  return <SignedInApp onSignOut={signOut} />;
+}
+
+/**
+ * The M0 fixture shell. First-run profile (E1.2) and the plan gate (E2.3) slot
+ * in ahead of the tabs once they exist.
+ */
+function SignedInApp({ onSignOut }: { onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab>('now');
   const [log, setLog] = useState<DailyLog>(emptyLog);
 
@@ -49,7 +82,9 @@ export default function App() {
   const remaining = remainingKcal(log, day, wd, FIXTURE_TARGET);
 
   return (
-    <AppShell tab={tab} onTabChange={setTab} onOpenSettings={() => undefined}>
+    // Settings arrives in E1.2; until then the gear is the way out, so a signed-in
+    // session is not a dead end during development.
+    <AppShell tab={tab} onTabChange={setTab} onOpenSettings={onSignOut}>
       {tab === 'now' ? (
         <section className="flex flex-col gap-4">
           <div>

@@ -1,5 +1,7 @@
 import { Resource } from 'sst';
-import { isAllowed, parseAllowlist } from './allowlist';
+// Shared with the client's fake auth, so the invite-only behaviour the screens
+// are tested against is the behaviour this trigger actually enforces.
+import { isAllowed, parseAllowlist } from '@/domain/allowlist';
 
 /**
  * Cognito pre-sign-up trigger: the gate that makes this Vire invite-only.

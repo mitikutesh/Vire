@@ -265,7 +265,16 @@ multi-week planning, calorie photo estimation.
   phone. Measured at M0 (E0.5): **228 KB raw / 73 KB gzipped**, after moving
   domain constants out of the Zod-importing schema module so the validator stays
   server-side (that alone was ~55 KB raw). A CI bundle-budget check is part of
-  the M5 polish pass (E5.4). Fonts self-hosted (Bricolage Grotesque + Instrument
+  the M5 polish pass (E5.4).
+  Re-measured after auth (E1.1): **377 KB raw / 117 KB gzipped** — Amplify costs
+  ~136 KB raw / ~44 KB gzipped, so auth alone takes over half the remaining
+  gzipped budget. Two facts to keep straight: a build _without_ Cognito
+  configured is only 241 KB / 77 KB, because Vite inlines the unset env vars and
+  Rollup then drops the whole provider branch — so CI's figure is not
+  production's. Lazy-loading would not help, since session restore runs on first
+  paint. If the budget ever binds, the lever is replacing Amplify with direct
+  Cognito calls and owning token refresh; that is a real cost and not worth
+  paying until it binds. Fonts self-hosted (Bricolage Grotesque + Instrument
   Sans via Fontsource — no Google Fonts request, no wordmark FOUT); plan
   generation P95 < 45 s with streamed per-day progress (Lambda ceiling 15 min,
   so the budget is UX-driven, not platform-driven).

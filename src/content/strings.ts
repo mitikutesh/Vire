@@ -76,8 +76,28 @@ export const t = {
       // household's AI budget (PLAN §2, decision 4).
       inviteOnly: 'This Vire is invite-only — ask the owner to add your email.',
       unverified: 'Check your inbox and confirm your email address first.',
+      wrongCode: "That code doesn't match — check the email and try again.",
+      expiredCode: 'That code has expired. Send a new one below.',
+      rateLimited: 'Too many attempts. Wait a minute, then try again.',
+      network: 'No connection. Check your network and try again.',
       generic: 'Something went wrong. Try again in a moment.',
     },
+
+    // Confirmation step: Cognito emails a code before the account works.
+    confirmTitle: 'Check your email',
+    confirmSubtitle: (email: string) => `We sent a confirmation code to ${email}.`,
+    codeLabel: 'Confirmation code',
+    codePlaceholder: '6-digit code',
+    confirmAction: 'Confirm my email',
+    resendCode: 'Send a new code',
+    backToSignIn: 'Back to sign in',
+
+    // Password reset, in the same two steps.
+    resetTitle: 'Reset your password',
+    resetSubtitle: 'We’ll email you a code to set a new password.',
+    resetRequestAction: 'Email me a code',
+    newPasswordLabel: 'New password',
+    resetConfirmAction: 'Set new password',
     // PRODUCTION: real flows, so the prototype's explanatory notes are gone.
     resetSent: 'Password reset sent — check your inbox.',
     verifySent: 'Confirmation email sent — check your inbox.',
