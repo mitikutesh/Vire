@@ -92,3 +92,87 @@ export type Plan = z.infer<typeof planSchema>;
 
 /** A weekday index, Monday = 0 — matches the prototype's `weekdayIdx`. */
 export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/* ───────────────────────────── profile ───────────────────────────── */
+
+export const sexSchema = z.enum(['f', 'm']);
+export type Sex = z.infer<typeof sexSchema>;
+
+/**
+ * The profile. Ranges are enforced here rather than only in the UI: the target
+ * is recomputed from these numbers server-side, so a nonsense weight would
+ * become a nonsense calorie budget (PLAN §6, I5).
+ */
+export const profileSchema = z.object({
+  name: z.string().max(80).default(''),
+  sex: sexSchema,
+  age: z.number().int().min(13).max(120),
+  h: z.number().int().min(100).max(250), // height, cm
+  w: z.number().min(30).max(300), // weight, kg
+  goalW: z.number().min(30).max(300),
+  act: z.number().min(1.2).max(1.725), // activity multiplier
+  pace: z.union([z.literal(250), z.literal(500), z.literal(750)]), // kcal deficit
+  city: z.string().min(1),
+  allergies: z.string().max(500).default(''),
+  waterMl: z.number().int().min(500).max(6000),
+  /** Always recomputed server-side — never trusted from the client. */
+  target: z.number().int().positive(),
+  /** IANA zone, so server-side reminders can find the user's local windows. */
+  timezone: z.string().min(1).default('Europe/Helsinki'),
+});
+export type Profile = z.infer<typeof profileSchema>;
+
+/** What `calcTarget` needs — a profile subset, so callers can't over-share. */
+export type TargetInput = Pick<Profile, 'sex' | 'age' | 'h' | 'w' | 'act' | 'pace'>;
+
+/* ───────────────────────────── daily log ───────────────────────────── */
+
+/** A swap: the user ate something other than the planned meal. */
+export const swapSchema = z.object({
+  n: z.string().max(120), // may be empty — "something else" is a valid answer
+  k: z.number().int().positive(),
+});
+export type Swap = z.infer<typeof swapSchema>;
+
+/**
+ * One meal slot's state, in the prototype's wire shape:
+ *   false / absent → not eaten
+ *   true           → eaten as planned
+ *   { n, k }       → ate something else instead, replacing the planned kcal
+ * Use `isSwap` / `isEaten` rather than inspecting the union at call sites.
+ */
+export const slotEntrySchema = z.union([z.boolean(), swapSchema]);
+export type SlotEntry = z.infer<typeof slotEntrySchema>;
+
+/** A logged activity or an extra bite: a name and a calorie figure. */
+export const kcalEntrySchema = z.object({
+  n: z.string().min(1).max(120),
+  k: z.number().int().positive(),
+});
+export type KcalEntry = z.infer<typeof kcalEntrySchema>;
+
+export const dailyLogSchema = z.object({
+  // Spelled out per slot rather than as a record: every slot is independently
+  // optional (an unlogged slot is simply absent), which a record type of an
+  // enum key cannot express.
+  m: z
+    .object({
+      b: slotEntrySchema.optional(),
+      l: slotEntrySchema.optional(),
+      s: slotEntrySchema.optional(),
+      d: slotEntrySchema.optional(),
+      e: slotEntrySchema.optional(),
+    })
+    .default({}),
+  water: z.number().int().min(0).max(40), // glasses
+  ex: z.boolean().default(false), // the day's planned movement, done?
+  exx: z.array(kcalEntrySchema).max(30).default([]), // extra movement
+  extra: z.array(kcalEntrySchema).max(30).default([]), // extra food
+});
+export type DailyLog = z.infer<typeof dailyLogSchema>;
+
+/** A weigh-in (I1). One per date; a later entry for the same day replaces it. */
+export const weightEntrySchema = z.object({
+  kg: z.number().min(30).max(300),
+});
+export type WeightEntry = z.infer<typeof weightEntrySchema>;
