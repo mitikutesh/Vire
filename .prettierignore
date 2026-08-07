@@ -1,0 +1,11 @@
+dist/
+coverage/
+node_modules/
+.sst/
+playwright-report/
+test-results/
+package-lock.json
+
+# The claude.ai prototype is the frozen source of truth for UX/copy/colors —
+# reformatting it would make diffing against it harder.
+vire-health-planner.jsx

@@ -1,0 +1,46 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# OIDC: `id-token: write` is the whole trick — GitHub mints a short-lived token
+# that an IAM role trusts, so no long-lived AWS keys exist in this repo.
+# Setup and the IAM trust policy live in docs/CICD.md.
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false # let a running deploy finish; queue the next
+
+jobs:
+  deploy:
+    name: Deploy to AWS (prod)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Deploy gate: main must be green before anything reaches AWS.
+      - name: Unit tests
+        run: npm test -- --run
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: vire-deploy-${{ github.run_id }}
+
+      - name: Deploy (SST)
+        run: npx sst deploy --stage prod
