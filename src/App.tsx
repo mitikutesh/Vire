@@ -9,6 +9,7 @@ import type { AuthClient } from '@/auth/types';
 import { createQueryClient } from '@/data/query';
 import {
   useDailyLog,
+  useGrocState,
   useLogs,
   usePlan,
   useProfile,
@@ -18,12 +19,12 @@ import {
 } from '@/data/useVireData';
 import type { DailyLogHandle } from '@/data/useVireData';
 import { useClock } from '@/hooks/useClock';
-import { GROC_CATS } from '@/domain/constants';
 import type { Profile, StoredPlan } from '@/domain/schema';
 import { t } from '@/content/strings';
 import { NowView } from '@/now/NowView';
 import { TodayView } from '@/today/TodayView';
 import { PlanGate } from '@/plan/PlanGate';
+import { ShopView } from '@/shop/ShopView';
 import { WeekView } from '@/week/WeekView';
 import { weighInDue } from '@/weight/weigh-in-due';
 import { addDays, dateKey, weekdayIdx } from '@/domain/clock';
@@ -196,8 +197,8 @@ function SignedInApp({
  * The shell: the four tabs, the settings gear, and the toast for a log write that
  * had to be rolled back.
  *
- * Now, Today and Week are their own views. Shop is still the M0 fixture layout —
- * it gets its grocery state, store tags and offer badges in E4.
+ * Now, Today, Week and Shop are all their own views. The offer badges join Shop in
+ * E4.3.
  */
 function Shell({
   profile,
@@ -231,6 +232,8 @@ function Shell({
   // Same query key as `logHandle` while the offset is zero, so viewing today
   // costs no extra request.
   const viewedLog = useDailyLog(api, dateKey(viewedDate));
+  // Keyed by plan id, so a regenerated week reads fresh ticks (E2.2).
+  const groc = useGrocState(api, plan.planId);
   const wd = weekdayIdx(now);
 
   /**
@@ -281,41 +284,7 @@ function Shell({
         />
       ) : null}
 
-      {tab === 'shop' ? (
-        <section className="flex flex-col gap-4">
-          <p className="text-sub text-sm">{t.shop.subtitle}</p>
-          <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
-            {t.shop.title}
-          </h1>
-
-          {GROC_CATS.map((cat) => {
-            const items = plan.groc.filter((item) => item.cat === cat);
-            if (items.length === 0) return null;
-            return (
-              <div key={cat} className="flex flex-col gap-1">
-                <p className="text-cloud px-1 text-xs font-bold tracking-wide uppercase">{cat}</p>
-                <ul className="border-line bg-card overflow-hidden rounded-2xl border">
-                  {items.map((item, idx) => (
-                    <li
-                      key={item.id}
-                      className="px-3 py-3"
-                      style={idx === 0 ? undefined : { borderTop: '1px solid var(--color-line)' }}
-                    >
-                      <p className="text-ink truncate text-sm font-medium">
-                        {item.n} <span className="text-sub font-normal">· {item.fi}</span>
-                      </p>
-                      <p className="text-sub text-xs">
-                        {item.q}
-                        {item.st ? t.shop.staple : ''}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </section>
-      ) : null}
+      {tab === 'shop' ? <ShopView plan={plan} groc={groc} /> : null}
     </AppShell>
   );
 }

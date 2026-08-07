@@ -363,15 +363,20 @@ export const t = {
     basket: (checked: number, total: number) => `${checked} of ${total} in the basket`,
     reset: 'reset',
     filterAll: (n: number) => `All (${n})`,
-    filterS: (n: number) => `S · ${n}`,
-    filterK: (n: number) => `K · ${n}`,
-    filterL: (n: number) => `Lidl · ${n}`,
+    // One function rather than three near-identical ones: the chain label is the
+    // only thing that differs, and three copies is three places to drift.
+    filterFor: (tag: 'S' | 'K' | 'L', n: number) => `${tag === 'L' ? 'Lidl' : tag} · ${n}`,
+    filterGroupAria: 'Filter by store',
+    filterEmpty: 'Nothing assigned to that store yet.',
     tagHint:
       'Tap the round tag on an item to assign it to a store chain (S → K → Lidl). Tap S / K links to check its live price.',
     staple: ' · pantry staple — skip if you have it',
     checkAria: 'Check',
     uncheckAria: 'Uncheck',
-    assignStoreAria: 'Assign store',
+    // Names the item and its current tag: with 60 rows, "Assign store" alone
+    // gives a screen reader 60 identical buttons.
+    assignStoreAria: (name: string, tag?: string) =>
+      tag ? `${name}: assigned to ${tag}. Change store.` : `${name}: assign a store.`,
     priceAtS: (name: string) => `Price at S-kaupat: ${name}`,
     priceAtK: (name: string) => `Price at K-Ruoka: ${name}`,
   },

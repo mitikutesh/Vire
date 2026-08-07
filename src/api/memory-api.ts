@@ -1,7 +1,8 @@
 import { WEEKDAYS, type WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import { dailyLogSchema, profileSchema, weightEntrySchema } from '@/domain/schema';
-import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
+import { dailyLogSchema, grocStateSchema, profileSchema, weightEntrySchema } from '@/domain/schema';
+import type { DailyLog, GrocState, Profile, StoredPlan } from '@/domain/schema';
+import { emptyGrocState } from '@/domain/groc-state';
 import { calcTarget } from '@/domain/target';
 import { starterPlan } from '@/content/starter-plan';
 import {
@@ -34,6 +35,7 @@ export class MemoryVireApi implements VireApi {
   private plan: StoredPlan | null = null;
   private readonly logs = new Map<string, DailyLog>();
   private readonly weights = new Map<string, number>();
+  private readonly grocStates = new Map<string, GrocState>();
   private planCount = 0;
   private readonly failDays: readonly WeekdayIndex[];
 
@@ -101,6 +103,18 @@ export class MemoryVireApi implements VireApi {
     const parsed = dailyLogSchema.safeParse(log);
     if (!parsed.success) throw new ApiError(422, 'invalid_log');
     this.logs.set(date, parsed.data);
+    return structuredClone(parsed.data);
+  }
+
+  async getGrocState(planId: string): Promise<GrocState> {
+    const state = this.grocStates.get(planId);
+    return state ? structuredClone(state) : emptyGrocState();
+  }
+
+  async saveGrocState(planId: string, state: GrocState): Promise<GrocState> {
+    const parsed = grocStateSchema.safeParse(state);
+    if (!parsed.success) throw new ApiError(422, 'invalid_groc_state');
+    this.grocStates.set(planId, parsed.data);
     return structuredClone(parsed.data);
   }
 

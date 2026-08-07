@@ -2,8 +2,8 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0 through M3 are complete.** 519 unit tests and an end-to-end test in
-real WebKit that walks sign-up, the profile form
+**Milestones M0 through M3 are complete**, plus the first story of M4. 548 unit
+tests and an end-to-end test in real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing
 has run against AWS yet — see the owner actions below.
@@ -417,6 +417,21 @@ nothing is worse than no button.
   per-item S/K price links.
 - AC: state lives in `GROCSTATE#<planId>`; fresh after regenerate (E2.2 test).
 - Parity: Shop (list, progress, filters, tags, links).
+- Done: `api/routes/groc.ts` and `src/shop/ShopView.tsx`. The plan-scoping
+  guarantee has its own route test: state written against one plan id is gone once
+  another plan is activated, which is review blocker #1 closed end to end.
+- The two optimistic-write hooks (log, groceries) now share one
+  `useOptimisticDoc`. Both had wanted the same behaviour, and the two subtle bugs
+  found in E3.1 — the cache write having to be synchronous, and `cancelQueries`
+  needing `revert: false` — now live in one place instead of being re-derivable.
+- Reset empties the basket but keeps the store assignments: the store map is the
+  plan for the trip, and starting the trip over is not the same as forgetting where
+  things are bought.
+- Beyond the AC: the store-tag button names its item and current tag, because with
+  sixty rows "Assign store" alone gives a screen reader sixty identical buttons;
+  the basket bar is a real `progressbar`; and the three per-chain filter strings
+  collapsed into one function, since the chain label was the only difference and
+  three copies is three places to drift.
 
 ### E4.2 — Area & deals links card (S)
 

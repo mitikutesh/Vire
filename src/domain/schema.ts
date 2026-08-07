@@ -96,6 +96,19 @@ export interface StoredPlan extends Plan {
   planId: string;
 }
 
+/**
+ * Per-plan grocery state: what is ticked off, and which chain each item is
+ * assigned to.
+ *
+ * Scoped to a plan rather than to the user, so regenerating a week cannot leave a
+ * tick on an item that is no longer on the list (PLAN §4, review blocker #1).
+ */
+export const grocStateSchema = z.object({
+  checked: z.record(z.string(), z.boolean()),
+  store: z.record(z.string(), storeTagSchema),
+});
+export type GrocState = z.infer<typeof grocStateSchema>;
+
 /* ───────────────────────────── profile ───────────────────────────── */
 
 export const sexSchema = z.enum(['f', 'm']);

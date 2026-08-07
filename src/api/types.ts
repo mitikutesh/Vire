@@ -1,6 +1,6 @@
 import type { WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
+import type { DailyLog, GrocState, Profile, StoredPlan } from '@/domain/schema';
 
 /** A day's log with the date it belongs to. */
 export interface DatedLog extends DailyLog {
@@ -64,6 +64,15 @@ export interface VireApi {
 
   /** Write the whole log for a date, returning it as the server parsed it. */
   saveLog(date: string, log: DailyLog): Promise<DailyLog>;
+
+  /**
+   * The grocery ticks and store tags for a plan.
+   *
+   * Scoped to the plan, not the user: regenerating a week must not leave last
+   * week's ticks on ids that now mean different food.
+   */
+  getGrocState(planId: string): Promise<GrocState>;
+  saveGrocState(planId: string, state: GrocState): Promise<GrocState>;
 
   /** The recent days, newest first, for the adherence summary (I3). */
   listLogs(): Promise<DatedLog[]>;

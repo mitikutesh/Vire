@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DatedWeight, VireApi } from '@/api/types';
 import { emptyLog } from '@/domain/log';
-import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
+import { emptyGrocState } from '@/domain/groc-state';
+import type { DailyLog, GrocState, Profile, StoredPlan } from '@/domain/schema';
 import { queryKeys } from './query';
 
 /**
@@ -32,22 +33,94 @@ export function usePlan(api: VireApi, enabled: boolean) {
 }
 
 /** One optimistic write, carrying what to restore if it fails. */
-interface LogWrite {
-  next: DailyLog;
-  previous: DailyLog | null;
+interface DocWrite<T> {
+  next: T;
+  previous: T | null;
 }
 
-export interface DailyLogHandle {
-  log: DailyLog;
-  /** The date this handle is reading and writing. */
-  date: string;
-  /** Apply a change to the freshest log there is, optimistically. */
-  update: (change: (previous: DailyLog) => DailyLog) => void;
-  /** False until the day's log has been read at least once. */
+/** What a caller gets back from `useOptimisticDoc`. */
+export interface DocHandle<T> {
+  value: T;
+  /** Apply a change to the freshest value there is, optimistically. */
+  update: (change: (previous: T) => T) => void;
+  /** False until the document has been read at least once. */
   ready: boolean;
   /** A write was rolled back; the UI owes the user an explanation. */
   saveFailed: boolean;
   dismissSaveError: () => void;
+}
+
+/**
+ * One small document, read once and written optimistically.
+ *
+ * Both things this app writes constantly — the day's log and the grocery list —
+ * want the same behaviour: the tap lands immediately, the request follows, and a
+ * failure puts the previous value back and says so. Sharing the implementation is
+ * mostly about two details that are easy to get wrong and were both wrong here
+ * once:
+ *
+ * 1. The optimistic write happens **synchronously in `update`**, not in
+ *    `onMutate`. `onMutate` can only run after an await, which puts the cache
+ *    behind the tap — and two taps in the same frame would then both compute from
+ *    the pre-tap value, the second erasing the first. Writing the cache here makes
+ *    each tap see the one before it, which is why the rollback value has to travel
+ *    with the mutation instead of being read inside it.
+ * 2. `cancelQueries` reverts a query to its pre-fetch data by default, which
+ *    asynchronously undoes the very write it is meant to protect. Hence
+ *    `revert: false`.
+ */
+function useOptimisticDoc<T>(options: {
+  queryKey: readonly unknown[];
+  read: () => Promise<T | null>;
+  write: (next: T) => Promise<T>;
+  /** What an absent document reads as. */
+  empty: () => T;
+  onSaved?: () => void;
+  onError?: (error: unknown) => void;
+}): DocHandle<T> {
+  const queryClient = useQueryClient();
+  const { queryKey, read, write, empty, onSaved, onError } = options;
+
+  const query = useQuery({ queryKey, queryFn: read });
+
+  const mutation = useMutation({
+    mutationFn: ({ next }: DocWrite<T>) => write(next),
+    onError: (error, { previous }) => {
+      // A tap that silently did nothing is worse than one that visibly failed,
+      // which is why `saveFailed` is part of the handle.
+      queryClient.setQueryData(queryKey, previous);
+      onError?.(error);
+    },
+    onSuccess: (stored) => {
+      // The server's parsed copy, so the client converges on the real defaults.
+      queryClient.setQueryData(queryKey, stored);
+      onSaved?.();
+    },
+  });
+
+  const update = (change: (previous: T) => T) => {
+    // See note 2 above: without `revert: false` this undoes the write below.
+    void queryClient.cancelQueries({ queryKey }, { revert: false });
+
+    const previous = queryClient.getQueryData<T | null>(queryKey) ?? null;
+    const next = change(previous ?? empty());
+    queryClient.setQueryData(queryKey, next);
+    mutation.mutate({ next, previous });
+  };
+
+  return {
+    value: query.data ?? empty(),
+    update,
+    ready: !query.isPending,
+    saveFailed: mutation.isError,
+    dismissSaveError: mutation.reset,
+  };
+}
+
+export interface DailyLogHandle extends DocHandle<DailyLog> {
+  log: DailyLog;
+  /** The date this handle is reading and writing. */
+  date: string;
 }
 
 /**
@@ -58,57 +131,39 @@ export interface DailyLogHandle {
  */
 export function useDailyLog(api: VireApi, date: string): DailyLogHandle {
   const queryClient = useQueryClient();
-  const key = queryKeys.log(date);
-
-  const query = useQuery({ queryKey: key, queryFn: () => api.getLog(date) });
-
-  /**
-   * The optimistic write happens in `update` below, not in `onMutate`.
-   *
-   * `onMutate` can only run after an await, which puts the cache update a
-   * microtask behind the tap — and worse, two taps in the same frame would both
-   * compute from the pre-tap log and the second would erase the first. Writing
-   * the cache synchronously in `update` makes each tap see the one before it, so
-   * the rollback value has to travel with the mutation instead of being read
-   * inside it.
-   */
-  const mutation = useMutation({
-    mutationFn: ({ next }: LogWrite) => api.saveLog(date, next),
-    onError: (error, { previous }) => {
-      // Put it back. A tap that silently did nothing is worse than one that
-      // visibly failed, which is why `saveFailed` is part of the handle.
-      queryClient.setQueryData(key, previous);
-      console.error('[vire] Saving the day’s log failed', error);
-    },
-    onSuccess: (stored) => {
-      // The server's parsed copy, so the client converges on the real defaults.
-      queryClient.setQueryData(key, stored);
-      // The adherence summary counts this day, so it is now stale.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.logs });
-    },
+  const doc = useOptimisticDoc<DailyLog>({
+    queryKey: queryKeys.log(date),
+    read: () => api.getLog(date),
+    write: (next) => api.saveLog(date, next),
+    empty: emptyLog,
+    // The adherence summary counts this day, so it is now stale.
+    onSaved: () => void queryClient.invalidateQueries({ queryKey: queryKeys.logs }),
+    onError: (error) => console.error('[vire] Saving the day’s log failed', error),
   });
 
-  const update = (change: (previous: DailyLog) => DailyLog) => {
-    // Abort any read still in flight: it predates the tap, and letting it land
-    // would overwrite what the user just did. `revert: false` is essential —
-    // cancelling reverts the query to its pre-fetch data by default, which would
-    // asynchronously undo the optimistic write two lines below.
-    void queryClient.cancelQueries({ queryKey: key }, { revert: false });
+  return { ...doc, log: doc.value, date };
+}
 
-    const previous = queryClient.getQueryData<DailyLog | null>(key) ?? null;
-    const next = change(previous ?? emptyLog());
-    queryClient.setQueryData(key, next);
-    mutation.mutate({ next, previous });
-  };
+export interface GrocStateHandle extends DocHandle<GrocState> {
+  groc: GrocState;
+}
 
-  return {
-    log: query.data ?? emptyLog(),
-    date,
-    update,
-    ready: !query.isPending,
-    saveFailed: mutation.isError,
-    dismissSaveError: mutation.reset,
-  };
+/**
+ * The grocery list's ticks and store tags, scoped to a plan (E4.1).
+ *
+ * The plan id is in the query key, so activating a new week reads fresh state
+ * rather than showing last week's ticks against this week's food.
+ */
+export function useGrocState(api: VireApi, planId: string): GrocStateHandle {
+  const doc = useOptimisticDoc<GrocState>({
+    queryKey: queryKeys.groc(planId),
+    read: () => api.getGrocState(planId),
+    write: (next) => api.saveGrocState(planId, next),
+    empty: emptyGrocState,
+    onError: (error) => console.error('[vire] Saving the grocery list failed', error),
+  });
+
+  return { ...doc, groc: doc.value };
 }
 
 /** The recent days, newest first, for the adherence summary (I3). */

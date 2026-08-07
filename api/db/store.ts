@@ -1,4 +1,4 @@
-import type { DailyLog, Plan, Profile, StoredPlan, WeightEntry } from '@/domain/schema';
+import type { DailyLog, GrocState, Plan, Profile, StoredPlan, WeightEntry } from '@/domain/schema';
 import type { StoreTag } from '@/domain/constants';
 import type { UserId } from './keys';
 
@@ -14,10 +14,9 @@ import type { UserId } from './keys';
  * claims — see api/auth/identity.ts.
  */
 
-export interface GrocState {
-  checked: Record<string, boolean>;
-  store: Record<string, StoreTag>;
-}
+// GrocState lives in @/domain/schema: the client reads and writes it too, and
+// one declaration is the only way the two stay in agreement.
+export type { GrocState };
 
 export interface OfferScan {
   checkedAt: number;

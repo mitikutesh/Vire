@@ -6,6 +6,7 @@ import { generationProvider, lazyProvider } from './ai/provider';
 import { CognitoTokenVerifier } from './auth/verifier';
 import { DynamoStore } from './db/dynamo-store';
 import { ValidatingStore } from './db/validating-store';
+import { grocRoutes } from './routes/groc';
 import { logRoutes } from './routes/log';
 import { planRoutes } from './routes/plan';
 import { profileRoutes } from './routes/profile';
@@ -59,6 +60,7 @@ app.route('/', profileRoutes(deps));
 app.route('/', planRoutes(deps));
 app.route('/', logRoutes(deps));
 app.route('/', weightRoutes(deps));
+app.route('/', grocRoutes(deps));
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

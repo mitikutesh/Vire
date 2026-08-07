@@ -45,6 +45,7 @@ function Harness({
   const [log, setLog] = useState(initial);
   const [offset, setOffset] = useState(initialOffset);
   const handle: DailyLogHandle = {
+    value: log,
     log,
     date: dateKey(addDays(WEDNESDAY, offset)),
     update: (change) => setLog((prev) => change(prev)),
