@@ -15,11 +15,6 @@ export type SessionState =
 export function useAuthSession(auth: AuthClient) {
   const [state, setState] = useState<SessionState>({ status: 'loading' });
 
-  const restore = useCallback(async () => {
-    const user = await auth.currentUser();
-    setState(user ? { status: 'signedIn', user } : { status: 'signedOut' });
-  }, [auth]);
-
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -38,11 +33,17 @@ export function useAuthSession(auth: AuthClient) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await auth.signOut();
-    // Drop to signedOut regardless: if the provider call failed, the local
-    // session must still end — the user asked to leave.
-    setState({ status: 'signedOut' });
+    try {
+      await auth.signOut();
+    } catch (error) {
+      // The user asked to leave. A failed provider call must not trap them in a
+      // signed-in UI, so the local session ends either way — but swallowing the
+      // error silently would hide a real defect, so it is logged.
+      console.error('[vire] Sign-out failed on the provider; ending local session anyway', error);
+    } finally {
+      setState({ status: 'signedOut' });
+    }
   }, [auth]);
 
-  return { state, onAuthed, signOut, restore };
+  return { state, onAuthed, signOut };
 }

@@ -69,13 +69,18 @@ export const t = {
     errors: {
       email: 'Enter a valid email address.',
       password: 'Password needs at least 8 characters.',
-      noAccount: 'No account with that email — create one below.',
+      // NOTE: there is deliberately no "no account with that email" message.
+      // An unknown address and a wrong password must be indistinguishable, or
+      // anyone can discover which addresses have accounts here. If you are
+      // adding an error code, do not reintroduce one.
       wrongPassword: 'Wrong password — try again.',
       emailTaken: 'That email already has an account — sign in instead.',
       // PRODUCTION: registration is invite-only so strangers cannot spend the
       // household's AI budget (PLAN §2, decision 4).
       inviteOnly: 'This Vire is invite-only — ask the owner to add your email.',
       unverified: 'Check your inbox and confirm your email address first.',
+      googleUnavailable:
+        'Google sign-in isn’t set up on this Vire yet — use your email and password.',
       wrongCode: "That code doesn't match — check the email and try again.",
       expiredCode: 'That code has expired. Send a new one below.',
       rateLimited: 'Too many attempts. Wait a minute, then try again.',

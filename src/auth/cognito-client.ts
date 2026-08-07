@@ -3,6 +3,7 @@ import {
   confirmResetPassword,
   confirmSignUp as amplifyConfirmSignUp,
   fetchAuthSession,
+  fetchUserAttributes,
   getCurrentUser,
   resendSignUpCode,
   resetPassword,
@@ -30,6 +31,19 @@ import { AuthError, type AuthClient, type AuthUser, type SignUpOutcome } from '.
  * The behaviour the screens rely on is covered by FakeAuthClient; this file is
  * reviewed code, not tested code, until the first deploy.
  */
+
+/**
+ * A network problem rather than "no session".
+ *
+ * Amplify surfaces both through the same rejection, so the distinction has to be
+ * made on the error itself: only a transport failure should be allowed to
+ * interrupt session restore.
+ */
+function isTransportFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'NetworkError' || error.name === 'TypeError') return true;
+  return /network|fetch|timeout|offline/i.test(error.message);
+}
 
 export interface CognitoConfig {
   userPoolId: string;
@@ -65,13 +79,33 @@ export function configureCognito(config: CognitoConfig): void {
 
 export class CognitoAuthClient implements AuthClient {
   async currentUser(): Promise<AuthUser | null> {
+    let user: Awaited<ReturnType<typeof getCurrentUser>>;
     try {
-      const user = await getCurrentUser();
-      return { userId: user.userId, email: user.signInDetails?.loginId ?? user.username };
-    } catch {
-      // Not signed in is the normal case on first load, not an error.
+      user = await getCurrentUser();
+    } catch (error) {
+      // Not signed in is the normal case on first load, not an error — but a
+      // transport failure is different. getCurrentUser refreshes tokens, so
+      // treating a flaky connection as signed-out would drop the user to a
+      // sign-in form where signing in also fails, defeating the whole point of
+      // restoring the session.
+      if (isTransportFailure(error)) {
+        throw mapAuthError(error);
+      }
       return null;
     }
+
+    // `username` is a generated identifier when the pool uses email as the
+    // username, and `signInDetails` is absent entirely after an OAuth redirect —
+    // so neither is a reliable email. Ask for the attribute.
+    let email = user.signInDetails?.loginId ?? '';
+    if (!email) {
+      try {
+        email = (await fetchUserAttributes()).email ?? user.username;
+      } catch {
+        email = user.username;
+      }
+    }
+    return { userId: user.userId, email };
   }
 
   async signIn(email: string, password: string): Promise<AuthUser> {

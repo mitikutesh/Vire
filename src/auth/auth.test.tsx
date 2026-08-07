@@ -10,9 +10,9 @@ import { AuthError } from './types';
 const OWNER = 'owner@example.com';
 const PASSWORD = 'correct horse';
 
-function setup(client = new FakeAuthClient()) {
+function setup(client = new FakeAuthClient(), googleEnabled = false) {
   const onAuthed = vi.fn();
-  render(<AuthView auth={client} onAuthed={onAuthed} />);
+  render(<AuthView auth={client} onAuthed={onAuthed} googleEnabled={googleEnabled} />);
   return { client, onAuthed, user: userEvent.setup() };
 }
 
@@ -232,29 +232,117 @@ describe('password reset', () => {
 });
 
 describe('Google sign-in', () => {
-  it('starts the redirect', async () => {
+  const googleButton = () => screen.queryByRole('button', { name: new RegExp(t.auth.google) });
+
+  it('is hidden when Google is not configured', () => {
+    // A button that silently does nothing is worse than no button — which is
+    // exactly what the development fake produced before this was gated.
+    setup(new FakeAuthClient(), false);
+    expect(googleButton()).not.toBeInTheDocument();
+  });
+
+  it('asks the client to start the redirect when it is configured', async () => {
     const client = new FakeAuthClient();
-    const { user } = setup(client);
-    await user.click(screen.getByRole('button', { name: new RegExp(t.auth.google) }));
-    expect(client.googleRedirects).toBe(1);
+    const redirect = vi.spyOn(client, 'signInWithGoogle').mockResolvedValue();
+    const { user } = setup(client, true);
+    await user.click(googleButton()!);
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it('explains itself rather than failing silently when it cannot work', async () => {
+    // The fake cannot perform an OAuth redirect, so it says so.
+    const { user } = setup(new FakeAuthClient(), true);
+    await user.click(googleButton()!);
+    expect(screen.getByRole('alert')).toHaveTextContent(t.auth.errors.googleUnavailable);
   });
 
   it('is offered on sign-up too', async () => {
-    const { user } = setup();
+    const { user } = setup(new FakeAuthClient(), true);
     await user.click(screen.getByRole('button', { name: t.auth.switchToSignUp }));
-    expect(screen.getByRole('button', { name: new RegExp(t.auth.google) })).toBeInTheDocument();
+    expect(googleButton()).toBeInTheDocument();
   });
 
   it('is not offered mid-confirmation, where it would abandon the flow', async () => {
-    const { user } = setup(new FakeAuthClient({ allowlist: OWNER }));
+    const { user } = setup(new FakeAuthClient({ allowlist: OWNER }), true);
     await user.click(screen.getByRole('button', { name: t.auth.switchToSignUp }));
     await fill(user, t.auth.emailLabel, OWNER);
     await fill(user, t.auth.passwordLabel, PASSWORD);
     await user.click(screen.getByRole('button', { name: t.auth.signUpAction }));
 
-    expect(
-      screen.queryByRole('button', { name: new RegExp(t.auth.google) }),
-    ).not.toBeInTheDocument();
+    expect(googleButton()).not.toBeInTheDocument();
+  });
+});
+
+describe('registration in development', () => {
+  it('lets any address register when the fake is set to allow all', async () => {
+    // What `npm run dev` uses: the allowlist exists to protect a real AI budget,
+    // and there is none behind an in-memory fake. Being blocked by a hardcoded
+    // `owner@example.com` was a genuine defect.
+    const { onAuthed, user } = setup(new FakeAuthClient({ allowAll: true, code: '123456' }));
+    await user.click(screen.getByRole('button', { name: t.auth.switchToSignUp }));
+    await fill(user, t.auth.emailLabel, 'mitiku@visma.com');
+    await fill(user, t.auth.passwordLabel, PASSWORD);
+    await user.click(screen.getByRole('button', { name: t.auth.signUpAction }));
+
+    await fill(user, t.auth.codeLabel, '123456');
+    await user.click(screen.getByRole('button', { name: t.auth.confirmAction }));
+
+    expect(onAuthed).toHaveBeenCalledWith(expect.objectContaining({ email: 'mitiku@visma.com' }));
+  });
+
+  it('still enforces an allowlist when one is configured', async () => {
+    const { user } = setup(new FakeAuthClient({ allowlist: OWNER }));
+    await user.click(screen.getByRole('button', { name: t.auth.switchToSignUp }));
+    await fill(user, t.auth.emailLabel, 'stranger@example.com');
+    await fill(user, t.auth.passwordLabel, PASSWORD);
+    await user.click(screen.getByRole('button', { name: t.auth.signUpAction }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(t.auth.errors.inviteOnly);
+  });
+});
+
+describe('field hygiene across steps', () => {
+  it('does not carry a typed password into the reset flow', async () => {
+    // The bug: after a failed sign-in, "Forgot your password?" arrived with the
+    // failing password pre-filled under "New password", so the user would reset
+    // their password to the one that was already not working.
+    const { user } = setup();
+    await fill(user, t.auth.emailLabel, OWNER);
+    await fill(user, t.auth.passwordLabel, 'the-old-password');
+    await user.click(screen.getByRole('button', { name: t.auth.signInAction }));
+
+    await user.click(screen.getByRole('button', { name: t.auth.forgot }));
+    await user.click(screen.getByRole('button', { name: t.auth.resetRequestAction }));
+
+    expect(screen.getByLabelText(t.auth.newPasswordLabel)).toHaveValue('');
+  });
+
+  it('does not carry a stale code between steps', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: t.auth.forgot }));
+    await fill(user, t.auth.emailLabel, OWNER);
+    await user.click(screen.getByRole('button', { name: t.auth.resetRequestAction }));
+    await fill(user, t.auth.codeLabel, '424242');
+
+    await user.click(screen.getByRole('button', { name: t.auth.backToSignIn }));
+    await user.click(screen.getByRole('button', { name: t.auth.forgot }));
+    await fill(user, t.auth.emailLabel, OWNER);
+    await user.click(screen.getByRole('button', { name: t.auth.resetRequestAction }));
+
+    expect(screen.getByLabelText(t.auth.codeLabel)).toHaveValue('');
+  });
+
+  it('keeps the password through the confirmation step, which needs it', async () => {
+    // The one transition that must NOT clear it: confirming signs the user in.
+    const { onAuthed, user } = setup(new FakeAuthClient({ allowAll: true, code: '111222' }));
+    await user.click(screen.getByRole('button', { name: t.auth.switchToSignUp }));
+    await fill(user, t.auth.emailLabel, OWNER);
+    await fill(user, t.auth.passwordLabel, PASSWORD);
+    await user.click(screen.getByRole('button', { name: t.auth.signUpAction }));
+    await fill(user, t.auth.codeLabel, '111222');
+    await user.click(screen.getByRole('button', { name: t.auth.confirmAction }));
+
+    expect(onAuthed).toHaveBeenCalled();
   });
 });
 

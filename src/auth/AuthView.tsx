@@ -21,9 +21,15 @@ type Step = 'signIn' | 'signUp' | 'confirm' | 'resetRequest' | 'resetConfirm';
 interface AuthViewProps {
   auth: AuthClient;
   onAuthed: (user: AuthUser) => void;
+  /**
+   * Whether to offer Google at all. Hidden by default: a button that cannot work
+   * is worse than no button, and Google needs infrastructure that does not exist
+   * yet (BACKLOG E1.3).
+   */
+  googleEnabled?: boolean;
 }
 
-export function AuthView({ auth, onAuthed }: AuthViewProps) {
+export function AuthView({ auth, onAuthed, googleEnabled = false }: AuthViewProps) {
   const [step, setStep] = useState<Step>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,10 +53,17 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
     try {
       await action();
     } catch (caught) {
-      // The error *code* is the contract, not its message: `message` is a
-      // developer detail for logs, and deriving the copy here means every
-      // implementation of the port renders the same wording.
-      setError(caught instanceof AuthError ? messageFor(caught.code) : t.auth.errors.generic);
+      if (caught instanceof AuthError) {
+        // The error *code* is the contract, not its message: `message` is a
+        // developer detail for logs, and deriving the copy here means every
+        // implementation of the port renders the same wording.
+        setError(messageFor(caught.code));
+      } else {
+        // Not a mapped failure, so it is a defect rather than a handled case.
+        // Showing the generic line is right; discarding it silently is not.
+        console.error('[vire] Unexpected auth failure', caught);
+        setError(t.auth.errors.generic);
+      }
     } finally {
       setBusy(false);
     }
@@ -78,6 +91,7 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
         onAuthed(await auth.signIn(email.trim(), password));
         return;
       }
+      // Keeps `password` deliberately: the confirm step signs in with it.
       setStep('confirm');
       setNote(t.auth.verifySent);
     });
@@ -99,19 +113,26 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
 
   const submitResetConfirm = () =>
     run(async () => {
-      const problem = password.length < MIN_PASSWORD ? t.auth.errors.password : '';
-      if (problem) {
-        setError(problem);
+      if (password.length < MIN_PASSWORD) {
+        setError(t.auth.errors.password);
         return;
       }
       await auth.confirmPasswordReset(email.trim(), code.trim(), password);
       onAuthed(await auth.signIn(email.trim(), password));
     });
 
+  /**
+   * User-initiated navigation. Clears the password and code as well as the
+   * messages: otherwise a password typed on the sign-in screen arrives
+   * pre-filled under "New password" in the reset flow, and the user resets their
+   * password to the one that was already failing.
+   */
   const goTo = (next: Step) => {
     setStep(next);
     setError('');
     setNote('');
+    setPassword('');
+    setCode('');
   };
 
   const inputClass =
@@ -134,16 +155,17 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
   }[step];
 
   const primary = {
-    signIn: { label: t.auth.signInAction, onClick: submitSignIn },
-    signUp: { label: t.auth.signUpAction, onClick: submitSignUp },
-    confirm: { label: t.auth.confirmAction, onClick: submitConfirm },
-    resetRequest: { label: t.auth.resetRequestAction, onClick: submitResetRequest },
-    resetConfirm: { label: t.auth.resetConfirmAction, onClick: submitResetConfirm },
+    signIn: { label: t.auth.signInAction, onSubmit: submitSignIn },
+    signUp: { label: t.auth.signUpAction, onSubmit: submitSignUp },
+    confirm: { label: t.auth.confirmAction, onSubmit: submitConfirm },
+    resetRequest: { label: t.auth.resetRequestAction, onSubmit: submitResetRequest },
+    resetConfirm: { label: t.auth.resetConfirmAction, onSubmit: submitResetConfirm },
   }[step];
 
-  const onEnter = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') void primary.onClick();
-  };
+  const showEmail = step !== 'confirm' && step !== 'resetConfirm';
+  const showCode = step === 'confirm' || step === 'resetConfirm';
+  const showPassword = step !== 'confirm' && step !== 'resetRequest';
+  const onSignInOrUp = step === 'signIn' || step === 'signUp';
 
   return (
     <div className="bg-paper flex min-h-screen flex-col items-center px-4 py-10">
@@ -163,72 +185,86 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
           <p className="text-sub mt-1 text-sm">{subheading}</p>
         </div>
 
-        {step !== 'confirm' && step !== 'resetConfirm' ? (
-          <label className="text-ink flex flex-col gap-1 text-sm font-medium">
-            {t.auth.emailLabel}
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={onEnter}
-              placeholder={t.auth.emailPlaceholder}
-              autoComplete="email"
-              className={inputClass}
-            />
-          </label>
-        ) : null}
-
-        {step === 'confirm' || step === 'resetConfirm' ? (
-          <label className="text-ink flex flex-col gap-1 text-sm font-medium">
-            {t.auth.codeLabel}
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={onEnter}
-              placeholder={t.auth.codePlaceholder}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              className={inputClass}
-            />
-          </label>
-        ) : null}
-
-        {step !== 'confirm' && step !== 'resetRequest' ? (
-          <label className="text-ink flex flex-col gap-1 text-sm font-medium">
-            {step === 'resetConfirm' ? t.auth.newPasswordLabel : t.auth.passwordLabel}
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={onEnter}
-              placeholder={t.auth.passwordPlaceholder}
-              autoComplete={step === 'signIn' ? 'current-password' : 'new-password'}
-              className={inputClass}
-            />
-          </label>
-        ) : null}
-
-        {error ? (
-          <p role="alert" className="text-berry text-sm font-medium">
-            {error}
-          </p>
-        ) : null}
-        {note ? <p className="text-sub text-sm">{note}</p> : null}
-
-        <button
-          type="button"
-          onClick={() => void primary.onClick()}
-          disabled={busy}
-          className="bg-ink flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold text-white"
-          style={{ opacity: busy ? 0.7 : 1 }}
+        {/* A real form: iOS Safari shows a "Go" key, and password managers need
+            a form around the email and password fields to offer to save them. */}
+        <form
+          className="flex flex-col gap-4"
+          // `noValidate`: the browser would otherwise block submission on an
+          // invalid type="email" value and show its own bubble, bypassing the
+          // app's designed copy and varying by browser. Validation is ours.
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void primary.onSubmit();
+          }}
         >
-          {busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : null}
-          {primary.label}
-        </button>
+          {showEmail ? (
+            <label className="text-ink flex flex-col gap-1 text-sm font-medium">
+              {t.auth.emailLabel}
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t.auth.emailPlaceholder}
+                autoComplete="email"
+                disabled={busy}
+                className={inputClass}
+              />
+            </label>
+          ) : null}
+
+          {showCode ? (
+            <label className="text-ink flex flex-col gap-1 text-sm font-medium">
+              {t.auth.codeLabel}
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                placeholder={t.auth.codePlaceholder}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                disabled={busy}
+                className={inputClass}
+              />
+            </label>
+          ) : null}
+
+          {showPassword ? (
+            <label className="text-ink flex flex-col gap-1 text-sm font-medium">
+              {step === 'resetConfirm' ? t.auth.newPasswordLabel : t.auth.passwordLabel}
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t.auth.passwordPlaceholder}
+                autoComplete={step === 'signIn' ? 'current-password' : 'new-password'}
+                disabled={busy}
+                className={inputClass}
+              />
+            </label>
+          ) : null}
+
+          {error ? (
+            <p role="alert" className="text-berry text-sm font-medium">
+              {error}
+            </p>
+          ) : null}
+          {note ? <p className="text-sub text-sm">{note}</p> : null}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="bg-ink flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold text-white"
+            style={{ opacity: busy ? 0.7 : 1 }}
+          >
+            {busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : null}
+            {primary.label}
+          </button>
+        </form>
 
         {step === 'confirm' ? (
           <button
             type="button"
+            disabled={busy}
             onClick={() => void run(() => auth.resendConfirmation(email.trim()))}
             className="text-lake text-sm font-medium"
           >
@@ -236,7 +272,7 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
           </button>
         ) : null}
 
-        {step === 'signIn' || step === 'signUp' ? (
+        {onSignInOrUp && googleEnabled ? (
           <>
             <div className="flex items-center gap-3">
               <span className="bg-line h-px flex-1" />
@@ -246,6 +282,7 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
 
             <button
               type="button"
+              disabled={busy}
               onClick={() => void run(() => auth.signInWithGoogle())}
               className="border-line bg-paper text-ink flex w-full items-center justify-center gap-2 rounded-full border py-3 text-sm font-semibold"
             >
@@ -261,6 +298,7 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
           {step === 'signIn' ? (
             <button
               type="button"
+              disabled={busy}
               onClick={() => goTo('resetRequest')}
               className="text-lake text-sm font-medium"
             >
@@ -268,11 +306,12 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
             </button>
           ) : null}
 
-          {step === 'signIn' || step === 'signUp' ? (
+          {onSignInOrUp ? (
             <p className="text-sub text-sm">
               {step === 'signIn' ? t.auth.newHere : t.auth.haveAccount}
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => goTo(step === 'signIn' ? 'signUp' : 'signIn')}
                 className="text-lake font-semibold"
               >
@@ -282,6 +321,7 @@ export function AuthView({ auth, onAuthed }: AuthViewProps) {
           ) : (
             <button
               type="button"
+              disabled={busy}
               onClick={() => goTo('signIn')}
               className="text-lake text-sm font-medium"
             >

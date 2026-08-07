@@ -23,6 +23,7 @@ export interface AuthUser {
  */
 export type AuthErrorCode =
   | 'invite_only'
+  | 'google_unavailable'
   | 'wrong_credentials'
   | 'email_taken'
   | 'unverified'

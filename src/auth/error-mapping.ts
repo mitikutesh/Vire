@@ -17,23 +17,27 @@ const BY_NAME: Record<string, AuthErrorCode> = {
   UsernameExistsException: 'email_taken',
   UserNotConfirmedException: 'unverified',
   InvalidPasswordException: 'weak_password',
-  InvalidParameterException: 'invalid_email',
   CodeMismatchException: 'wrong_code',
   ExpiredCodeException: 'expired_code',
   TooManyRequestsException: 'rate_limited',
   LimitExceededException: 'rate_limited',
   TooManyFailedAttemptsException: 'rate_limited',
   NetworkError: 'network',
+  // Deliberately NOT mapped: InvalidParameterException. Cognito raises it for a
+  // range of request problems — a password rejected by the pool policy, a
+  // malformed code, a missing attribute — so calling it an email problem tells
+  // someone to fix a field that may not even be on screen.
 };
 
 /**
  * The pre-sign-up trigger refuses non-allowlisted addresses by throwing, and
  * Cognito surfaces that as a generic `UserLambdaValidationException` carrying
- * the message text. Matching on our own sentence is the only signal available —
- * so the trigger's wording and this pattern have to stay in step, which is why
- * both are asserted in tests.
+ * the message text. Matching on our own sentence is the only signal available.
+ *
+ * The trigger throws `t.auth.errors.inviteOnly` verbatim, and a test asserts
+ * this pattern matches that string — so the two cannot drift apart silently.
  */
-const INVITE_ONLY_MARKER = /invite-only/i;
+export const INVITE_ONLY_MARKER = /invite-only/i;
 
 export function mapAuthError(error: unknown): AuthError {
   if (error instanceof AuthError) return error;
@@ -55,6 +59,8 @@ export function messageFor(code: AuthErrorCode): string {
   switch (code) {
     case 'invite_only':
       return t.auth.errors.inviteOnly;
+    case 'google_unavailable':
+      return t.auth.errors.googleUnavailable;
     case 'wrong_credentials':
       return t.auth.errors.wrongPassword;
     case 'email_taken':

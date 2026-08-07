@@ -156,6 +156,23 @@ link builders (s-kaupat, k-ruoka, YouTube, Maps) in one module.
   (custom UI over the Cognito SDK — no hosted-UI look), E2E happy path.
 - Parity: Auth (all).
 
+### E1.3 — Google sign-in infrastructure (M)
+
+Discovered during the E1.1 review: the button was rendered with nothing behind
+it. It is now hidden until this story lands, because a button that silently does
+nothing is worse than no button.
+
+- AC: a Cognito hosted-UI domain exists, a Google identity provider is declared
+  on the pool, and the app client registers the callback and sign-out URLs.
+- AC: `VITE_COGNITO_OAUTH_DOMAIN` is injected by SST, which is what makes
+  `googleSignInAvailable()` true and reveals the button.
+- AC: the pre-sign-up allowlist still gates federated first sign-in (already
+  covered by a test — Google must not be a way around the invite gate).
+- **Owner action first:** create an OAuth client in Google Cloud and store the
+  client id and secret as SST secrets.
+- AC: `AuthUser.email` after a Google sign-in is a real address, not the
+  generated `cognito:username`.
+
 ### E1.2 — First-run profile & settings (L)
 
 - AC: all profile fields with the prototype's options and layout; live target

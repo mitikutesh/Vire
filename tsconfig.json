@@ -4,5 +4,15 @@
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.api.json" },
     { "path": "./tsconfig.node.json" }
-  ]
+  ],
+  // Unused by `tsc -b` (this is a solution file), but esbuild resolves path
+  // aliases from the *nearest* tsconfig.json and does not follow project
+  // references. Without this, bundling any Lambda that imports `@/...` fails —
+  // which silently broke the one function that gates registration.
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  }
 }

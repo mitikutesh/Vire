@@ -80,10 +80,35 @@ npx sst secret set OpenaiApiKey    "sk-..."          --stage prod   # optional
 npx sst deploy --stage prod
 ```
 
-`SignupAllowlist` is what makes this instance invite-only. It **fails closed**:
-an unset or empty allowlist rejects every registration, because failing open
-would mean an open sign-up endpoint attached to a paid AI key. A single `@domain`
-entry admits a whole domain.
+## Inviting someone
+
+Registration is invite-only, and _where_ the allowlist lives depends on how the
+app is running.
+
+**Deployed (Cognito).** The Cognito pre-sign-up trigger reads the
+`SignupAllowlist` secret, so inviting someone is one command — no redeploy:
+
+```bash
+npx sst secret set SignupAllowlist "you@example.com,partner@example.com" --stage prod
+# or a whole domain:
+npx sst secret set SignupAllowlist "@example.com" --stage prod
+```
+
+It **fails closed**: an unset or empty allowlist rejects every registration,
+because failing open would mean an open sign-up endpoint attached to a paid AI
+key. A refused address is told the instance is invite-only, rather than being
+left to guess at a wrong password.
+
+**Local `npm run dev` (in-memory fake).** There is no allowlist by default —
+**any** email address may register, because the allowlist exists to protect a
+real AI budget and there is none behind the fake. Accounts live in the browser
+tab and disappear on reload. To exercise the invite-only path locally, set
+`VITE_DEV_ALLOWLIST` in `.env` (see `.env.example`).
+
+**Google sign-in is not available yet** and the button is therefore hidden. It
+needs a Cognito hosted-UI domain, a Google identity provider on the pool, and
+registered callback URLs — none of which exist (backlog E1.3). Email and
+password is the working path.
 
 Until that bootstrap has run, the deploy workflow is expected to fail on the AWS
 step while CI stays green. `api/sst-env.d.ts` is a hand-written stand-in for the

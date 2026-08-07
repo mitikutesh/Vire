@@ -19,7 +19,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 4173',
+    // VITE_AUTH_MODE=fake is required: without it a production build with no
+    // Cognito configuration throws at startup by design, and the served app
+    // would never boot.
+    command: 'VITE_AUTH_MODE=fake npm run build && npm run preview -- --port 4173',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,

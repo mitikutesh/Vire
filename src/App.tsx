@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AuthView } from '@/auth/AuthView';
-import { createAuthClient } from '@/auth/client';
+import { createAuthClient, googleSignInAvailable } from '@/auth/client';
 import { useAuthSession } from '@/auth/useAuthSession';
 import type { AuthClient } from '@/auth/types';
 import { GROC_CATS } from '@/domain/constants';
@@ -45,7 +45,7 @@ export default function App({ auth: injected }: { auth?: AuthClient } = {}) {
   }
 
   if (state.status === 'signedOut') {
-    return <AuthView auth={auth} onAuthed={onAuthed} />;
+    return <AuthView auth={auth} onAuthed={onAuthed} googleEnabled={googleSignInAvailable()} />;
   }
 
   return <SignedInApp onSignOut={signOut} />;

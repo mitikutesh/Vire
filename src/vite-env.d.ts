@@ -11,6 +11,18 @@ interface ImportMetaEnv {
   /** Hosted-UI domain — required only for Google sign-in. */
   readonly VITE_COGNITO_OAUTH_DOMAIN?: string;
   readonly VITE_AWS_REGION?: string;
+  /**
+   * `fake` builds against the in-memory auth fake. Needed for the Playwright
+   * preview build, which has no user pool: without it a production build with no
+   * Cognito configuration throws at startup by design.
+   */
+  readonly VITE_AUTH_MODE?: 'fake';
+  /**
+   * Restrict who may register against the development fake. Unset means any
+   * address may register locally — the allowlist protects a real AI budget, and
+   * there is none behind the fake.
+   */
+  readonly VITE_DEV_ALLOWLIST?: string;
 }
 
 interface ImportMeta {
