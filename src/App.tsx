@@ -17,16 +17,14 @@ import {
 import type { DailyLogHandle } from '@/data/useVireData';
 import { useClock } from '@/hooks/useClock';
 import { GROC_CATS } from '@/domain/constants';
-import type { Profile, SlotKey, StoredPlan, Swap } from '@/domain/schema';
-import { SLOTS } from '@/content/plan';
+import type { Profile, StoredPlan } from '@/domain/schema';
 import { t } from '@/content/strings';
 import { NowView } from '@/now/NowView';
+import { TodayView } from '@/today/TodayView';
 import { PlanGate } from '@/plan/PlanGate';
 import { WeekView } from '@/week/WeekView';
 import { dateKey, weekdayIdx } from '@/domain/clock';
-import { burnedKcal, eatenKcal, remainingKcal } from '@/domain/log';
 import { AppShell } from '@/ui/AppShell';
-import { MealCard } from '@/ui/MealCard';
 import { Toast } from '@/ui/Toast';
 import type { Tab } from '@/ui/BottomNav';
 import { SettingsView } from '@/settings/SettingsView';
@@ -153,7 +151,7 @@ function SignedInApp({
 
   return (
     <>
-      <FixtureShell
+      <Shell
         profile={profile}
         plan={plan}
         log={log}
@@ -181,11 +179,13 @@ function SignedInApp({
 }
 
 /**
- * The M0 shell, reading the saved profile's target, the user's own plan and the
- * day's persisted log. The live views arrive with their own stories (E3.2, E3.3,
- * E4.1).
+ * The shell: the four tabs, the settings gear, and the toast for a log write that
+ * had to be rolled back.
+ *
+ * Now, Today and Week are their own views. Shop is still the M0 fixture layout —
+ * it gets its grocery state, store tags and offer badges in E4.
  */
-function FixtureShell({
+function Shell({
   profile,
   plan,
   log: logHandle,
@@ -199,23 +199,7 @@ function FixtureShell({
   onOpenSettings: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('now');
-  const { log, update } = logHandle;
-
   const wd = weekdayIdx(now);
-  const day = plan.days[wd];
-
-  const toggleSlot = (slot: SlotKey) =>
-    update((prev) => ({ ...prev, m: { ...prev.m, [slot]: !prev.m[slot] } }));
-
-  const logSwap = (slot: SlotKey, swap: Swap) =>
-    update((prev) => ({ ...prev, m: { ...prev.m, [slot]: swap } }));
-
-  const clearSwap = (slot: SlotKey) =>
-    update((prev) => ({ ...prev, m: { ...prev.m, [slot]: false } }));
-
-  const eaten = eatenKcal(log, day);
-  const burned = burnedKcal(log, wd);
-  const remaining = remainingKcal(log, day, wd, profile.target);
 
   return (
     <AppShell tab={tab} onTabChange={setTab} onOpenSettings={onOpenSettings}>
@@ -234,36 +218,7 @@ function FixtureShell({
       ) : null}
 
       {tab === 'today' ? (
-        <section className="flex flex-col gap-4">
-          <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
-            {t.today.title}
-          </h1>
-
-          <div className="bg-ink rounded-2xl p-4">
-            <p className="text-xs" style={{ color: '#B9C6BF' }}>
-              {t.today.eatenBurned(eaten, burned)}
-            </p>
-            <p className="disp font-bold text-white" style={{ fontSize: 20 }}>
-              {remaining < 0 ? t.today.over(Math.abs(remaining)) : t.today.remaining(remaining)}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {SLOTS.map((slot) => (
-              <MealCard
-                key={slot}
-                slot={slot}
-                meal={day[slot]}
-                entry={log.m[slot]}
-                onToggle={() => toggleSlot(slot)}
-                onLogSwap={(swap) => logSwap(slot, swap)}
-                onClearSwap={() => clearSwap(slot)}
-              />
-            ))}
-          </div>
-
-          <p className="text-sub px-1 text-xs">{t.today.disclaimer}</p>
-        </section>
+        <TodayView profile={profile} plan={plan} log={logHandle} now={now} />
       ) : null}
 
       {tab === 'week' ? <WeekView plan={plan} today={wd} /> : null}

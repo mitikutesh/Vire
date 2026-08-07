@@ -2,7 +2,7 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0, M1 and M2 are complete**, plus the first two stories of M3. 432
+**Milestones M0, M1 and M2 are complete**, plus the first three stories of M3. 455
 unit tests and an end-to-end test in real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing

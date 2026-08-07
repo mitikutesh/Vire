@@ -266,7 +266,12 @@ export const t = {
     movementKcal: (kcal: number) => `≈ ${kcal} kcal`,
     markDone: 'Mark done',
     done: 'Done ✓',
-    removeAria: 'Remove',
+    // Named, not a bare "Remove": with four logged rows a screen reader would
+    // otherwise announce four identical buttons.
+    removeAria: (name: string) => `Remove ${name}`,
+    extraRow: (name: string, kcal: number) => `${name} · ${kcal} kcal`,
+    exerciseRow: (name: string, kcal: number) => `${name} · +${kcal} kcal`,
+    waterProgressAria: (glasses: number, goal: number) => `${glasses} of ${goal} glasses`,
 
     waterGoal: (glasses: number) =>
       `Water — aim for ${glasses} glasses (≈ ${
