@@ -1,5 +1,34 @@
 # Vire — Product Backlog
 
+## Implementation status (updated 2026-08-07)
+
+**Milestone M0 is complete**, plus the provider layer from M2. 220 tests;
+lint, typecheck, format and the static build are clean; one commit per story.
+
+| Story                             | State      | Note                                                            |
+| --------------------------------- | ---------- | --------------------------------------------------------------- |
+| E0.1 Repo scaffold & CI/CD        | ✅ done    | CI + OIDC deploy workflow                                       |
+| E0.2 AWS infrastructure (SST)     | ✅ done    | Declared, **not yet deployed**                                  |
+| E0.3 Design tokens & typography   | ✅ done    |                                                                 |
+| E0.4 Strings & static content     | ✅ done    |                                                                 |
+| E0.5 Accessible UI kit + M0 shell | ✅ done    | I4 nesting defect fixed                                         |
+| E0.6 Data layer & isolation tests | ✅ done    |                                                                 |
+| E0.7 Pure-logic port              | ✅ done    | Calorie floors covered                                          |
+| E2.0 AI provider layer            | ✅ done    | Anthropic + OpenAI, contract suite                              |
+| E1.1 → E5.4                       | ⬜ next    | Implementable locally; see below                                |
+| E6.1 → E6.4 (iOS)                 | 🔒 blocked | Needs Xcode, an Apple Developer account and a device/TestFlight |
+| E7.5 Kesko API                    | 🔒 blocked | Needs the owner to register at developer.kesko.fi               |
+
+**Owner actions that unblock end-to-end verification.** Everything above is
+verified by unit and component tests only — nothing has run against AWS. To get
+past that: run the one-time OIDC bootstrap in `docs/CICD.md`, set the three
+secrets listed in the README, then `npx sst deploy --stage prod`. Until then the
+auth, generation and offer-scan stories can be written and unit-tested but their
+end-to-end acceptance criteria (a real Cognito sign-in, a real generated week, a
+real offer scan) cannot be checked.
+
+---
+
 Derived from `docs/PLAN.md` (v3: AWS architecture, pluggable AI provider,
 verified Kesko/Apple Health research). One epic per milestone + a post-MVP
 epic. Every story lists acceptance criteria (AC) and tasks; **Parity**
