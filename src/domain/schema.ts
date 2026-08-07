@@ -10,24 +10,17 @@ import { z } from 'zod';
  * is a reason not to) so the frozen prototype stays a readable reference.
  */
 
-/** Meal slots, in the order they occur through the day. */
-export const SLOT_KEYS = ['b', 'l', 's', 'd', 'e'] as const;
+// Constants live in ./constants so the view layer can import them without
+// dragging Zod into the client bundle. Re-exported here so callers that do need
+// both a schema and its constant have one import.
+import { GROC_CATS, SLOT_KEYS, STORE_TAGS } from './constants';
+
+export { GROC_CATS, SLOT_KEYS, STORE_TAGS } from './constants';
+export type { GrocCat, SlotKey, StoreTag, WeekdayIndex } from './constants';
+
 export const slotKeySchema = z.enum(SLOT_KEYS);
-export type SlotKey = z.infer<typeof slotKeySchema>;
-
-/** Grocery aisles, in the fixed order the Shop tab renders them. */
-export const GROC_CATS = [
-  'Fish & meat',
-  'Dairy & eggs',
-  'Fruit & vegetables',
-  'Bread & grains',
-  'Pantry & cans',
-] as const;
 export const grocCatSchema = z.enum(GROC_CATS);
-export type GrocCat = z.infer<typeof grocCatSchema>;
-
-export const storeTagSchema = z.enum(['S', 'K', 'L']);
-export type StoreTag = z.infer<typeof storeTagSchema>;
+export const storeTagSchema = z.enum(STORE_TAGS);
 
 /**
  * One meal. `fi` carries the Finnish dish name where one exists — the UI is
@@ -89,9 +82,6 @@ export const planSchema = z.object({
   groc: z.array(grocItemSchema),
 });
 export type Plan = z.infer<typeof planSchema>;
-
-/** A weekday index, Monday = 0 — matches the prototype's `weekdayIdx`. */
-export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /* ───────────────────────────── profile ───────────────────────────── */
 

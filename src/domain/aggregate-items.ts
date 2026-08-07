@@ -1,4 +1,5 @@
-import { GROC_CATS, type GrocCat, type GrocItem } from './schema';
+import { GROC_CATS, type GrocCat } from './constants';
+import type { GrocItem } from './schema';
 import { grocId } from './groc-id';
 
 /**

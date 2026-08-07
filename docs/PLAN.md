@@ -259,10 +259,16 @@ multi-week planning, calorie photo estimation.
   failure mode exists in this stack — nothing sleeps. Billing alarm at €5/mo
   as a tripwire (CloudWatch billing alert, free).
 
-- **Performance:** app-shell JS budget < 200 KB; fonts self-hosted (Bricolage
-  Grotesque + Instrument Sans via Fontsource — no Google Fonts request, no
-  wordmark FOUT); plan generation P95 < 45 s with streamed per-day progress
-  (Lambda ceiling 15 min, so the budget is UX-driven, not platform-driven).
+- **Performance:** app-shell JS budget **< 200 KB gzipped transfer** — the unit
+  the original figure has to mean, since ReactDOM alone exceeds 200 KB
+  uncompressed. Track raw size too, because parse cost is what hurts a mid-range
+  phone. Measured at M0 (E0.5): **228 KB raw / 73 KB gzipped**, after moving
+  domain constants out of the Zod-importing schema module so the validator stays
+  server-side (that alone was ~55 KB raw). A CI bundle-budget check is part of
+  the M5 polish pass (E5.4). Fonts self-hosted (Bricolage Grotesque + Instrument
+  Sans via Fontsource — no Google Fonts request, no wordmark FOUT); plan
+  generation P95 < 45 s with streamed per-day progress (Lambda ceiling 15 min,
+  so the budget is UX-driven, not platform-driven).
 - **Offline (M5):** service worker caches shell + active plan + today's log;
   iOS Safari has **no Background Sync API** — writes queue in an IndexedDB
   outbox flushed on reconnect/visibility-change (last-write-wins per field).

@@ -1,5 +1,5 @@
-import type { SlotKey, WeekdayIndex } from '@/domain/schema';
-import { SLOT_KEYS } from '@/domain/schema';
+import type { SlotKey, WeekdayIndex } from '@/domain/constants';
+import { SLOT_KEYS } from '@/domain/constants';
 
 /**
  * Versioned product content: the shape of a Vire week.
