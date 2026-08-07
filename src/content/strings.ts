@@ -351,6 +351,10 @@ export const t = {
     offersRefreshing: 'Refreshing the offer scan…',
     offersError:
       "Couldn't fetch offers right now. Tap the arrow to retry, or use the deals links above.",
+    // The scan is the priciest call the app makes, so the limit is low and worth
+    // explaining rather than presenting as a generic failure.
+    offersRateLimited:
+      "That's enough offer scans for today. The deals links above are always current.",
     offersFound: (n: number) => `${n} of your items`,
     offersFoundTail: ' look discounted right now. ',
     offersNone: 'No current offers matched your list. ',

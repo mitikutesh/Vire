@@ -2,12 +2,13 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { handle, streamHandle } from 'hono/aws-lambda';
 import { Resource } from 'sst';
-import { generationProvider, lazyProvider } from './ai/provider';
+import { generationProvider, lazyProvider, offerProvider } from './ai/provider';
 import { CognitoTokenVerifier } from './auth/verifier';
 import { DynamoStore } from './db/dynamo-store';
 import { ValidatingStore } from './db/validating-store';
 import { grocRoutes } from './routes/groc';
 import { logRoutes } from './routes/log';
+import { offerRoutes } from './routes/offers';
 import { planRoutes } from './routes/plan';
 import { profileRoutes } from './routes/profile';
 import { weightRoutes } from './routes/weight';
@@ -27,6 +28,21 @@ app.use('*', cors());
  * JWKS, and re-fetching it on every call would add a network round trip to every
  * authenticated request.
  */
+/**
+ * The offer provider is separate from the generation provider: the scan needs live
+ * web search, which not every adapter has (PLAN §3a). Lazy for the same reason as
+ * the other one — a misconfiguration should fail the scan, not the container.
+ */
+const offerProviderLazy = lazyProvider(() =>
+  offerProvider({
+    AI_PROVIDER: process.env['AI_PROVIDER'],
+    AI_PROVIDER_OFFERS: process.env['AI_PROVIDER_OFFERS'],
+    AI_MODEL: process.env['AI_MODEL'],
+    ANTHROPIC_API_KEY: Resource.AnthropicApiKey.value,
+    OPENAI_API_KEY: Resource.OpenaiApiKey.value,
+  }),
+);
+
 function buildDeps() {
   const store = new ValidatingStore(new DynamoStore(Resource.Data.name));
   const verifier = new CognitoTokenVerifier(Resource.Users.id, Resource.Web.id);
@@ -61,6 +77,7 @@ app.route('/', planRoutes(deps));
 app.route('/', logRoutes(deps));
 app.route('/', weightRoutes(deps));
 app.route('/', grocRoutes(deps));
+app.route('/', offerRoutes({ ...deps, provider: offerProviderLazy }));
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

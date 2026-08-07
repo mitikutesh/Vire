@@ -2,8 +2,8 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0 through M3 are complete**, plus two stories of M4. 553 unit tests
-and an end-to-end test in real WebKit that walks sign-up, the profile form
+**Milestones M0 through M4 are complete.** 591 unit tests and an end-to-end test in
+real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing
 has run against AWS yet — see the owner actions below.
@@ -461,6 +461,27 @@ nothing is worse than no button.
   note), one-tap "Tag N items", best-effort label with timestamp + "verify
   with the S/K price links" (guardrail 5).
 - Parity: Shop (offers card).
+- Done: `api/routes/offers.ts` and `src/shop/OffersCard.tsx`.
+- Everything the model returns is clamped server-side against **this plan's own
+  item ids**, so a hallucinated food cannot badge something the user is not buying;
+  one deal per item, at most fifteen, text truncated to 60 characters, store
+  restricted to the three chains. Without that a bad scan writes nonsense into a
+  cache that then survives twelve hours. `clampDeals` is exported and tested
+  directly.
+- The 12-hour window and the 4/day limit live in `src/domain/offers.ts`, shared by
+  the route, the DynamoDB TTL and the client's auto-scan decision. The TTL used to
+  restate 12 hours independently; a TTL that outlived "stale" would serve a cache
+  the UI had already given up on.
+- Auto-scan happens once per mount and only when the cache is stale, guarded by a
+  ref — StrictMode double-invokes effects in development, and each scan costs a
+  slice of the daily allowance.
+- A provider without web search is reported as **501**, not 502: nothing is wrong
+  with the week, the operator pointed `AI_PROVIDER_OFFERS` at an adapter that
+  cannot search. A spent allowance gets its own message rather than looking like a
+  failure.
+- Guardrail 5 has three tests of its own: the footer names the scan as AI-searched,
+  carries the time it was checked, and tells the user to verify with the price
+  links; and a failure never shows stale results beside it.
 
 ---
 

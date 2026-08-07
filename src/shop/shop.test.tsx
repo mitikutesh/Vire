@@ -37,6 +37,7 @@ function Harness({ state, onCityChange }: { state: GrocState; onCityChange: (c: 
         setCity(next);
         onCityChange(next);
       }}
+      offers={{ scan: null, loaded: true, scanning: false, failed: null, onScan: () => {} }}
     />
   );
 }

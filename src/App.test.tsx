@@ -319,9 +319,11 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: 'Shop' }));
     expect(screen.getByRole('heading', { name: 'Groceries' })).toBeInTheDocument();
     expect(screen.getByText('Fish & meat')).toBeInTheDocument();
-    // English name with the Finnish shopping name beside it — the pairing that
-    // makes the store search links work.
-    expect(screen.getByText(/Salmon fillet/)).toBeInTheDocument();
+    // Found by its checkbox rather than its text: the offers card names matched
+    // items too, and this also proves the row is interactive.
+    expect(
+      screen.getByRole('checkbox', { name: `${t.shop.checkAria} Salmon fillet` }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Now' }));
     expect(screen.getByRole('button', { name: 'Now' })).toHaveAttribute('aria-current', 'page');

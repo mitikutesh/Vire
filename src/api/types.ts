@@ -1,6 +1,6 @@
 import type { WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import type { DailyLog, GrocState, Profile, StoredPlan } from '@/domain/schema';
+import type { DailyLog, GrocState, OfferScan, Profile, StoredPlan } from '@/domain/schema';
 
 /** A day's log with the date it belongs to. */
 export interface DatedLog extends DailyLog {
@@ -73,6 +73,16 @@ export interface VireApi {
    */
   getGrocState(planId: string): Promise<GrocState>;
   saveGrocState(planId: string, state: GrocState): Promise<GrocState>;
+
+  /** The cached offer scan for a plan, or null if none has been run (E4.3). */
+  getOffers(planId: string): Promise<OfferScan | null>;
+
+  /**
+   * Run a fresh scan. The most expensive request the app makes — a
+   * web-searching model call — so it is rate limited server-side and the result
+   * is cached for twelve hours.
+   */
+  scanOffers(planId: string): Promise<OfferScan>;
 
   /** The recent days, newest first, for the adherence summary (I3). */
   listLogs(): Promise<DatedLog[]>;

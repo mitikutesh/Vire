@@ -5,8 +5,18 @@ import { t } from '@/content/strings';
 import { GROC_CATS, STORE_TAGS } from '@/domain/constants';
 import type { StoreTag } from '@/domain/constants';
 import { kLink, sLink } from '@/domain/links';
-import type { GrocItem, StoredPlan } from '@/domain/schema';
+import type { Deal, GrocItem, OfferScan, StoredPlan } from '@/domain/schema';
 import { AreaCard } from './AreaCard';
+import { OffersCard } from './OffersCard';
+
+/** What the Shop tab needs to render and drive the offer scan. */
+export interface OffersProps {
+  scan: OfferScan | null;
+  loaded: boolean;
+  scanning: boolean;
+  failed: unknown;
+  onScan: () => void;
+}
 
 /**
  * The Shop tab: the week's list, organised for a single trip.
@@ -33,6 +43,7 @@ export function ShopView({
   city,
   onCityChange,
   savingCity = false,
+  offers,
 }: {
   plan: StoredPlan;
   groc: GrocStateHandle;
@@ -40,6 +51,7 @@ export function ShopView({
   /** Writes back to the profile — the offer scan reads the same field (E4.3). */
   onCityChange: (city: string) => void;
   savingCity?: boolean;
+  offers: OffersProps;
 }) {
   const { groc, update } = grocHandle;
   const [filter, setFilter] = useState<Filter>('all');
@@ -68,6 +80,19 @@ export function ShopView({
   // and survive emptying the basket.
   const resetChecked = () => update((prev) => ({ ...prev, checked: {} }));
 
+  /**
+   * One tap to send every discounted item to the chain it is cheapest at.
+   *
+   * It overwrites existing tags for those items on purpose: the user asked for the
+   * discount store, and silently keeping an older manual choice would make the
+   * button do nothing visible on exactly the items they had already thought about.
+   */
+  const applyDeals = (deals: readonly Deal[]) =>
+    update((prev) => ({
+      ...prev,
+      store: { ...prev.store, ...Object.fromEntries(deals.map((d) => [d.id, d.store])) },
+    }));
+
   return (
     <section className="flex flex-col gap-4">
       <div>
@@ -78,6 +103,16 @@ export function ShopView({
       </div>
 
       <AreaCard city={city} onCityChange={onCityChange} saving={savingCity} />
+
+      <OffersCard
+        offers={offers.scan}
+        loaded={offers.loaded}
+        items={items}
+        scanning={offers.scanning}
+        failed={offers.failed}
+        onScan={offers.onScan}
+        onApply={applyDeals}
+      />
 
       <div className="border-line bg-card flex flex-col gap-2 rounded-2xl border p-4">
         <div className="flex items-center justify-between gap-2">

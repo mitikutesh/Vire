@@ -109,6 +109,27 @@ export const grocStateSchema = z.object({
 });
 export type GrocState = z.infer<typeof grocStateSchema>;
 
+/**
+ * A cached offer scan (E4.3).
+ *
+ * Also plan-scoped: a badge that said "on offer at K" belongs to the item it was
+ * found for, and regenerating the week invalidates that pairing.
+ */
+export const dealSchema = z.object({
+  id: z.string().min(1),
+  store: storeTagSchema,
+  deal: z.string().min(1).max(60),
+});
+export type Deal = z.infer<typeof dealSchema>;
+
+export const offerScanSchema = z.object({
+  /** Epoch millis. The UI shows it, because a stale offer is worse than none. */
+  checkedAt: z.number().int().positive(),
+  deals: z.array(dealSchema).max(15),
+  note: z.string().max(160),
+});
+export type OfferScan = z.infer<typeof offerScanSchema>;
+
 /* ───────────────────────────── profile ───────────────────────────── */
 
 export const sexSchema = z.enum(['f', 'm']);

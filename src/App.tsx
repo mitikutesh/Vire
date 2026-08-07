@@ -11,6 +11,7 @@ import {
   useDailyLog,
   useGrocState,
   useLogs,
+  useOffers,
   usePlan,
   useProfile,
   usePlanWriter,
@@ -245,6 +246,7 @@ function Shell({
   const viewedLog = useDailyLog(api, dateKey(viewedDate));
   // Keyed by plan id, so a regenerated week reads fresh ticks (E2.2).
   const groc = useGrocState(api, plan.planId);
+  const offers = useOffers(api, plan.planId);
   const wd = weekdayIdx(now);
 
   /**
@@ -302,6 +304,13 @@ function Shell({
           city={profile.city}
           onCityChange={onCityChange}
           savingCity={savingCity}
+          offers={{
+            scan: offers.offers,
+            loaded: offers.loaded,
+            scanning: offers.scan.isPending,
+            failed: offers.scan.error,
+            onScan: () => offers.scan.mutate(),
+          }}
         />
       ) : null}
     </AppShell>

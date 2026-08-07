@@ -1,7 +1,7 @@
 import type { WeekdayIndex } from '@/domain/constants';
 import { dataOf, parsePlanEvent, takeFrames } from '@/domain/plan-stream';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import type { DailyLog, GrocState, Profile, StoredPlan } from '@/domain/schema';
+import type { DailyLog, GrocState, OfferScan, Profile, StoredPlan } from '@/domain/schema';
 import {
   ApiError,
   PlanGenerationError,
@@ -128,6 +128,18 @@ export class HttpVireApi implements VireApi {
     });
     if (!response.ok) return HttpVireApi.fail(response);
     return (await response.json()) as GrocState;
+  }
+
+  async getOffers(planId: string): Promise<OfferScan | null> {
+    const response = await this.request(`/offers/${planId}`);
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as OfferScan | null;
+  }
+
+  async scanOffers(planId: string): Promise<OfferScan> {
+    const response = await this.request(`/offers/${planId}/scan`, { method: 'POST' });
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as OfferScan;
   }
 
   async listLogs(): Promise<DatedLog[]> {

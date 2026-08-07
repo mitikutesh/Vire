@@ -1,7 +1,7 @@
 import { WEEKDAYS, type WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
 import { dailyLogSchema, grocStateSchema, profileSchema, weightEntrySchema } from '@/domain/schema';
-import type { DailyLog, GrocState, Profile, StoredPlan } from '@/domain/schema';
+import type { DailyLog, GrocState, OfferScan, Profile, StoredPlan } from '@/domain/schema';
 import { emptyGrocState } from '@/domain/groc-state';
 import { calcTarget } from '@/domain/target';
 import { starterPlan } from '@/content/starter-plan';
@@ -36,6 +36,7 @@ export class MemoryVireApi implements VireApi {
   private readonly logs = new Map<string, DailyLog>();
   private readonly weights = new Map<string, number>();
   private readonly grocStates = new Map<string, GrocState>();
+  private readonly offers = new Map<string, OfferScan>();
   private planCount = 0;
   private readonly failDays: readonly WeekdayIndex[];
 
@@ -116,6 +117,30 @@ export class MemoryVireApi implements VireApi {
     if (!parsed.success) throw new ApiError(422, 'invalid_groc_state');
     this.grocStates.set(planId, parsed.data);
     return structuredClone(parsed.data);
+  }
+
+  async getOffers(planId: string): Promise<OfferScan | null> {
+    const scan = this.offers.get(planId);
+    return scan ? structuredClone(scan) : null;
+  }
+
+  /**
+   * A plausible scan without a provider: the first two items of the plan, one per
+   * chain. Enough to drive the badge, the apply action and the footer in dev.
+   */
+  async scanOffers(planId: string): Promise<OfferScan> {
+    const items = this.plan?.groc.slice(0, 2) ?? [];
+    const scan: OfferScan = {
+      checkedAt: Date.now(),
+      deals: items.map((item, i) => ({
+        id: item.id,
+        store: i === 0 ? ('S' as const) : ('K' as const),
+        deal: `−20 % this week`,
+      })),
+      note: 'Fake scan — no provider is configured in this build.',
+    };
+    this.offers.set(planId, scan);
+    return structuredClone(scan);
   }
 
   async listLogs(): Promise<DatedLog[]> {

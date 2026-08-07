@@ -1,5 +1,12 @@
-import type { DailyLog, GrocState, Plan, Profile, StoredPlan, WeightEntry } from '@/domain/schema';
-import type { StoreTag } from '@/domain/constants';
+import type {
+  DailyLog,
+  GrocState,
+  OfferScan,
+  Plan,
+  Profile,
+  StoredPlan,
+  WeightEntry,
+} from '@/domain/schema';
 import type { UserId } from './keys';
 
 /**
@@ -18,11 +25,9 @@ import type { UserId } from './keys';
 // one declaration is the only way the two stay in agreement.
 export type { GrocState };
 
-export interface OfferScan {
-  checkedAt: number;
-  deals: { id: string; store: StoreTag; deal: string }[];
-  note: string;
-}
+// OfferScan lives in @/domain/schema for the same reason as GrocState: the client
+// reads it, and one declaration is the only way the two stay in agreement.
+export type { OfferScan };
 
 // StoredPlan lives in @/domain/schema: it is a wire shape the client reads too,
 // and one declaration is the only way the two stay in agreement.

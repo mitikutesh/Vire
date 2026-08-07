@@ -10,12 +10,16 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { OFFER_TTL_MS } from '@/domain/offers';
 import type { DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
 import { SK, SK_PREFIX, assertDateKey, pk, type UserId } from './keys';
 import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore } from './store';
 
 /** Cached offer scans expire on their own; nothing has to sweep them. */
-const OFFERS_TTL_SECONDS = 12 * 60 * 60;
+// Derived from the shared window rather than restated: the client uses the same
+// figure to decide whether to auto-scan, and a TTL that outlived "stale" would
+// serve a cache the UI had already given up on.
+const OFFERS_TTL_SECONDS = OFFER_TTL_MS / 1000;
 /** Rate-limit counters only matter for the day they cover. */
 const RATE_LIMIT_TTL_SECONDS = 48 * 60 * 60;
 

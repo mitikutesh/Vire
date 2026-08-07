@@ -220,6 +220,31 @@ export function useProfileWriter() {
 }
 
 /**
+ * The cached offer scan and a way to refresh it (E4.3).
+ *
+ * The read is cheap; the scan is not. Auto-scanning is left to the caller, which
+ * knows whether the cache is stale — this hook only makes sure a fresh scan lands
+ * in the cache so the badges update without a refetch.
+ */
+export function useOffers(api: VireApi, planId: string) {
+  const queryClient = useQueryClient();
+  const key = queryKeys.offers(planId);
+
+  const query = useQuery({ queryKey: key, queryFn: () => api.getOffers(planId) });
+
+  const scan = useMutation({
+    mutationFn: () => api.scanOffers(planId),
+    onSuccess: (result) => queryClient.setQueryData(key, result),
+    onError: (error) => console.error('[vire] The offer scan failed', error),
+    // No retry: a scan is the most expensive request the app makes, and a failed
+    // one has already spent its slice of the daily allowance.
+    retry: false,
+  });
+
+  return { scan, offers: query.data ?? null, loaded: !query.isPending };
+}
+
+/**
  * Change just the city, from the Shop tab (E4.2).
  *
  * Goes through `saveProfile` like any other profile edit, so the server recomputes
