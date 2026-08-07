@@ -4,6 +4,8 @@ node_modules/
 # build output
 dist/
 .vite/
+# incremental typecheck caches — machine-local, and they churn on every run
+*.tsbuildinfo
 
 # SST / CDK
 .sst/

@@ -1,16 +1,38 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { MemoryVireApi } from '@/api/memory-api';
 import { FakeAuthClient } from '@/auth/fake-client';
 import { t } from '@/content/strings';
+import type { Profile } from '@/domain/schema';
 import App from './App';
 
 const OWNER = 'owner@example.com';
 
-/** Render already signed in — the auth screen has its own suite. */
+const PROFILE: Profile = {
+  name: 'Aino',
+  sex: 'f',
+  age: 35,
+  h: 170,
+  w: 80,
+  goalW: 72,
+  act: 1.375,
+  pace: 500,
+  city: 'Helsinki',
+  allergies: '',
+  waterMl: 2000,
+  target: 1600,
+  timezone: 'Europe/Helsinki',
+};
+
+/**
+ * Render already signed in *and* already set up — the auth screen and the profile
+ * form each have their own suite, so the shell tests should not have to walk
+ * through both first.
+ */
 async function renderSignedIn() {
-  render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} />);
-  // The splash shows first while the session is restored.
+  render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi(PROFILE)} />);
+  // A splash shows while the session and profile load.
   await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
 }
 
@@ -32,10 +54,59 @@ describe('session gate', () => {
   it('returns to the sign-in screen after signing out', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
+    // Sign-out lives in Settings now that the gear opens it.
     await user.click(screen.getByRole('button', { name: t.app.settingsAria }));
+    await user.click(screen.getByRole('button', { name: new RegExp(t.settings.signOut) }));
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: t.auth.signInTitle })).toBeInTheDocument(),
     );
+  });
+});
+
+describe('first-run gate', () => {
+  it('sends a signed-in user with no profile to setup, not to the tabs', async () => {
+    // Without a profile there is no calorie target, so the shell has nothing to
+    // show.
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi()} />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.settings.firstRunTitle })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
+  });
+
+  it('enters the app once the profile is saved', async () => {
+    const user = userEvent.setup();
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi()} />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: t.settings.firstRunTitle })).toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: t.settings.saveFirstRun }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
+  });
+});
+
+describe('settings from the shell', () => {
+  it('opens on the gear and closes again', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+
+    await user.click(screen.getByRole('button', { name: t.app.settingsAria }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: t.settings.closeAria }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('uses the saved target, not a hardcoded one', async () => {
+    render(
+      <App
+        auth={new FakeAuthClient({ signedInAs: OWNER })}
+        api={new MemoryVireApi({ ...PROFILE, target: 1850 })}
+      />,
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
+    expect(screen.getByText(t.now.ofTarget(1850))).toBeInTheDocument();
   });
 });
 

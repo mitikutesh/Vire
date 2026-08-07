@@ -1,18 +1,32 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { handle, streamHandle } from 'hono/aws-lambda';
+import { Resource } from 'sst';
+import { CognitoTokenVerifier } from './auth/verifier';
+import { DynamoStore } from './db/dynamo-store';
+import { ValidatingStore } from './db/validating-store';
+import { profileRoutes } from './routes/profile';
 
 /**
  * The API: one Hono app on one Lambda behind a Function URL.
  *
- * Routes arrive with their stories — the profile target route in E1.2, plan
- * generation in E2.1, the offer scan in E4.3, export and deletion in E5.3. This
- * file exists now so the infrastructure in sst.config.ts has something real to
- * point at and the deploy path can be exercised end to end.
+ * Remaining routes arrive with their stories — plan generation in E2.1, the offer
+ * scan in E4.3, export and deletion in E5.3.
  */
 const app = new Hono();
 
 app.use('*', cors());
+
+/**
+ * Built once per container, not per request: the token verifier caches the pool's
+ * JWKS, and re-fetching it on every call would add a network round trip to every
+ * authenticated request.
+ */
+function buildDeps() {
+  const store = new ValidatingStore(new DynamoStore(Resource.Data.name));
+  const verifier = new CognitoTokenVerifier(Resource.Users.id, Resource.Web.id);
+  return { store, verifier };
+}
 
 /** Liveness only — deliberately says nothing about the database or provider. */
 app.get('/health', (c) =>
@@ -24,6 +38,8 @@ app.get('/health', (c) =>
     aiProvider: process.env['AI_PROVIDER'] ?? 'unset',
   }),
 );
+
+app.route('/', profileRoutes(buildDeps()));
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createVireApi } from '@/api/client';
+import type { VireApi } from '@/api/types';
 import { AuthView } from '@/auth/AuthView';
 import { createAuthClient, googleSignInAvailable } from '@/auth/client';
 import { useAuthSession } from '@/auth/useAuthSession';
 import type { AuthClient } from '@/auth/types';
 import { GROC_CATS } from '@/domain/constants';
-import type { DailyLog, SlotKey, Swap } from '@/domain/schema';
+import type { DailyLog, Profile, SlotKey, Swap } from '@/domain/schema';
 import { EX, SLOTS } from '@/content/plan';
 import { DAY_NAMES, SLOT_LABEL, t } from '@/content/strings';
 import { STARTER_DAYS, STARTER_GROC } from '@/content/starter-plan';
@@ -15,6 +17,7 @@ import { DayStrip } from '@/ui/DayStrip';
 import { MealCard } from '@/ui/MealCard';
 import { Ring } from '@/ui/Ring';
 import type { Tab } from '@/ui/BottomNav';
+import { SettingsView } from '@/settings/SettingsView';
 
 /**
  * M0 shell: every tab rendered from the starter plan so the locked design and
@@ -24,13 +27,17 @@ import type { Tab } from '@/ui/BottomNav';
  * E3.2/E3.3, Shop in E4.1 — along with live data, the 30-second clock tick and
  * day rollover. State here is deliberately local and throwaway.
  */
-const FIXTURE_TARGET = 1600;
-
-/** `auth` is injectable so tests can start from a signed-in session. */
-export default function App({ auth: injected }: { auth?: AuthClient } = {}) {
+/**
+ * `auth` and `api` are injectable so tests can start from a signed-in session
+ * with a profile already saved, instead of driving both flows every time.
+ */
+export default function App({
+  auth: injectedAuth,
+  api: injectedApi,
+}: { auth?: AuthClient; api?: VireApi } = {}) {
   // One client for the app's lifetime: rebuilding it would reconfigure Amplify
   // and drop the session on every render.
-  const auth = useMemo(() => injected ?? createAuthClient(), [injected]);
+  const auth = useMemo(() => injectedAuth ?? createAuthClient(), [injectedAuth]);
   const { state, onAuthed, signOut } = useAuthSession(auth);
 
   if (state.status === 'loading') {
@@ -48,14 +55,92 @@ export default function App({ auth: injected }: { auth?: AuthClient } = {}) {
     return <AuthView auth={auth} onAuthed={onAuthed} googleEnabled={googleSignInAvailable()} />;
   }
 
-  return <SignedInApp onSignOut={signOut} />;
+  return <SignedInApp auth={auth} api={injectedApi} onSignOut={signOut} />;
 }
 
 /**
- * The M0 fixture shell. First-run profile (E1.2) and the plan gate (E2.3) slot
- * in ahead of the tabs once they exist.
+ * Signed in. The profile gates everything else: without one there is no calorie
+ * target, so first-run setup comes before the tabs. The plan gate (E2.3) slots in
+ * next, between the profile and the shell.
  */
-function SignedInApp({ onSignOut }: { onSignOut: () => void }) {
+function SignedInApp({
+  auth,
+  api: injectedApi,
+  onSignOut,
+}: {
+  auth: AuthClient;
+  api?: VireApi | undefined;
+  onSignOut: () => void;
+}) {
+  const api = useMemo(() => injectedApi ?? createVireApi(auth), [injectedApi, auth]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const loaded = await api.getProfile();
+        if (!cancelled) setProfile(loaded);
+      } catch (error) {
+        // Treated as first-run rather than a dead end: the form is the only way
+        // forward, and it will surface a save failure of its own.
+        console.error('[vire] Could not load the profile', error);
+      } finally {
+        if (!cancelled) setLoadingProfile(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
+  if (loadingProfile) {
+    return (
+      <div className="bg-paper flex min-h-screen items-center justify-center">
+        <p className="disp text-cloud font-bold" style={{ fontSize: 20 }}>
+          {t.loading.splash}
+        </p>
+      </div>
+    );
+  }
+
+  // First run: non-dismissible, because there is nothing behind it yet.
+  if (!profile) {
+    return <SettingsView api={api} profile={null} onSaved={setProfile} onSignOut={onSignOut} />;
+  }
+
+  return (
+    <>
+      <FixtureShell profile={profile} onOpenSettings={() => setSettingsOpen(true)} />
+      {settingsOpen ? (
+        <SettingsView
+          api={api}
+          profile={profile}
+          onSaved={(saved) => {
+            setProfile(saved);
+            setSettingsOpen(false);
+          }}
+          onClose={() => setSettingsOpen(false)}
+          onSignOut={onSignOut}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The M0 fixture shell, now reading the real target from the saved profile. The
+ * live views arrive with their own stories (E2.4, E3.2, E3.3, E4.1).
+ */
+function FixtureShell({
+  profile,
+  onOpenSettings,
+}: {
+  profile: Profile;
+  onOpenSettings: () => void;
+}) {
   const [tab, setTab] = useState<Tab>('now');
   const [log, setLog] = useState<DailyLog>(emptyLog);
 
@@ -79,12 +164,10 @@ function SignedInApp({ onSignOut }: { onSignOut: () => void }) {
 
   const eaten = eatenKcal(log, day);
   const burned = burnedKcal(log, wd);
-  const remaining = remainingKcal(log, day, wd, FIXTURE_TARGET);
+  const remaining = remainingKcal(log, day, wd, profile.target);
 
   return (
-    // Settings arrives in E1.2; until then the gear is the way out, so a signed-in
-    // session is not a dead end during development.
-    <AppShell tab={tab} onTabChange={setTab} onOpenSettings={onSignOut}>
+    <AppShell tab={tab} onTabChange={setTab} onOpenSettings={onOpenSettings}>
       {tab === 'now' ? (
         <section className="flex flex-col gap-4">
           <div>
@@ -112,12 +195,12 @@ function SignedInApp({ onSignOut }: { onSignOut: () => void }) {
 
           <div className="border-line bg-card flex items-center gap-4 rounded-2xl border p-4">
             <Ring
-              pct={eaten / FIXTURE_TARGET}
+              pct={eaten / profile.target}
               over={remaining < 0}
               label={remaining < 0 ? `+${Math.abs(remaining)}` : String(remaining)}
               sub={remaining < 0 ? t.now.kcalOver : t.now.kcalLeft}
             />
-            <p className="text-sub text-xs">{t.now.ofTarget(FIXTURE_TARGET)}</p>
+            <p className="text-sub text-xs">{t.now.ofTarget(profile.target)}</p>
           </div>
         </section>
       ) : null}

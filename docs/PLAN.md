@@ -274,7 +274,10 @@ multi-week planning, calorie photo estimation.
   production's. Lazy-loading would not help, since session restore runs on first
   paint. If the budget ever binds, the lever is replacing Amplify with direct
   Cognito calls and owning token refresh; that is a real cost and not worth
-  paying until it binds. Fonts self-hosted (Bricolage Grotesque + Instrument
+  paying until it binds. After the profile screen (E1.2): **442 KB raw / 132 KB
+  gzipped** — two thirds of the gzipped budget spent before a single real view
+  exists, so the CI check should land sooner than M5 rather than later. Fonts
+  self-hosted (Bricolage Grotesque + Instrument
   Sans via Fontsource — no Google Fonts request, no wordmark FOUT); plan
   generation P95 < 45 s with streamed per-day progress (Lambda ceiling 15 min,
   so the budget is UX-driven, not platform-driven).

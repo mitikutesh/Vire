@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
  * build that never gets further than sign-in — and would also pass for a build
  * that crashes into an empty page in a way this exact test once did.
  */
-test('the built app boots, signs in, and renders the four-tab shell', async ({ page }) => {
+test('the built app boots, onboards, and renders the four-tab shell', async ({ page }) => {
   const crashes: string[] = [];
   page.on('pageerror', (error) => crashes.push(error.message));
 
@@ -24,6 +24,12 @@ test('the built app boots, signs in, and renders the four-tab shell', async ({ p
   // The fake emails a fixed code.
   await page.getByLabel('Confirmation code').fill('123456');
   await page.getByRole('button', { name: 'Confirm my email' }).click();
+
+  // First run: no profile means no calorie target, so setup comes before the
+  // tabs. The defaults are valid, so accepting them is enough here.
+  await expect(page.getByRole('heading', { name: 'Tell Vire about you' })).toBeVisible();
+  await expect(page.getByText(/Mifflin-St Jeor/)).toBeVisible(); // guardrail 2
+  await page.getByRole('button', { name: 'Save and continue' }).click();
 
   // Now the shell itself: all four destinations, and real plan content.
   for (const tab of ['Now', 'Today', 'Week', 'Shop']) {

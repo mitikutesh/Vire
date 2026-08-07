@@ -146,6 +146,8 @@ export const t = {
 
     saveFirstRun: 'Save and continue',
     save: 'Save changes',
+    fixHighlighted: 'Check the highlighted fields and try again.',
+    saveFailed: 'Couldn’t save your profile. Try again in a moment.',
 
     planSection: 'Weekly plan',
     planBlurb: 'Regenerate if your goals changed or you want different meals.',
