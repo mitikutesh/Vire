@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, LogOut, Sparkles, X } from 'lucide-react';
+import { Loader2, LogOut, X } from 'lucide-react';
 import { ApiError, type ProfileInput, type VireApi } from '@/api/types';
 import { ACTIVITY_LEVELS, CITIES, PACE_LEVELS, WATER } from '@/content/plan';
 import { t } from '@/content/strings';
@@ -240,7 +240,6 @@ export function SettingsView({
             // the app uses, and the only place a button is not ink.
             style={{ background: confirmRegen ? C.berry : C.ink }}
           >
-            <Sparkles size={15} aria-hidden="true" />
             {confirmRegen ? t.settings.regenerateConfirm : t.settings.regenerate}
           </button>
           {confirmRegen ? (

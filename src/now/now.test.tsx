@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DailyLogHandle } from '@/data/useVireData';
 import { EX } from '@/content/plan';
 import { starterPlan } from '@/content/starter-plan';
-import { t } from '@/content/strings';
+import { SLOT_LABEL, t } from '@/content/strings';
 import { emptyLog } from '@/domain/log';
 import type { DailyLog, Profile, StoredPlan } from '@/domain/schema';
 import { NowView } from './NowView';
@@ -108,7 +108,7 @@ describe('the header', () => {
 
   it('uses the first name only', () => {
     setup();
-    expect(screen.getByText(/Aino —/)).toBeInTheDocument();
+    expect(screen.getByText(/Aino ·/)).toBeInTheDocument();
     expect(screen.queryByText(/Virtanen/)).not.toBeInTheDocument();
   });
 });
@@ -133,7 +133,7 @@ describe('the meal that is now', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: t.now.rightNow('Dinner') }),
     ).toBeInTheDocument();
-    expect(screen.getByText(t.now.nowChip('≈ 17:30–19'))).toBeInTheDocument();
+    expect(screen.getByText(t.now.nowChip(SLOT_LABEL.d.hint))).toBeInTheDocument();
   });
 
   it('shows the Finnish name beside the meal', () => {

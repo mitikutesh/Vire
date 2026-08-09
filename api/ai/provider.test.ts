@@ -255,6 +255,44 @@ describe('salvaging a day’s grocery rows', () => {
   });
 });
 
+describe('dashes in generated copy', () => {
+  it('rewrites an em dash the model put in a meal name or step', () => {
+    // Generated text sits directly beside hand-written copy that has no em
+    // dashes in it, so one arriving here is the loudest "a machine wrote this"
+    // signal the UI can show.
+    const raw = {
+      ...VALID_DAY,
+      b: { ...VALID_DAY.b, n: 'Oat porridge — with berries', st: ['Simmer 5 min — do not boil.'] },
+    };
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.b.n).toBe('Oat porridge, with berries');
+    expect(parsed.b.st?.[0]).toBe('Simmer 5 min, do not boil.');
+  });
+
+  it('keeps a number range readable instead of splitting the sentence', () => {
+    // "5–7 min" is a range, not punctuation: turning it into "5, 7 min" would
+    // change a cooking instruction into nonsense.
+    const raw = { ...VALID_DAY, b: { ...VALID_DAY.b, st: ['Cook 5–7 min until creamy.'] } };
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.b.st?.[0]).toBe('Cook 5-7 min until creamy.');
+  });
+
+  it('reaches the ingredient and grocery strings too', () => {
+    const raw = {
+      ...VALID_DAY,
+      b: { ...VALID_DAY.b, ing: ['rye bread — 2 slices'] },
+      items: [['Kaurahiutale — luomu', 'Oats', 'Pantry & cans', '1 kg']],
+    };
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.b.ing[0]).toBe('rye bread, 2 slices');
+    expect(parsed.items[0]?.[0]).toBe('Kaurahiutale, luomu');
+  });
+
+  it('tells the model not to produce them in the first place', () => {
+    expect(dayGenerationPrompt(config)).toContain('Never use em dashes');
+  });
+});
+
 describe('asking for something new (regeneration)', () => {
   it('names nothing to avoid on a first generation', () => {
     expect(avoidRule(undefined)).toBe('');

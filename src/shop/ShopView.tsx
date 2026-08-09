@@ -321,7 +321,9 @@ function ItemRow({
             color: tag ? chainColor(tag) : 'var(--color-sub)',
           }}
         >
-          {tag ?? '–'}
+          {/* "+" rather than a dash placeholder: it is what tapping does, and
+              the untagged chip is the one that wants an invitation. */}
+          {tag ?? '+'}
         </button>
       </div>
     </li>

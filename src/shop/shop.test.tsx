@@ -145,7 +145,7 @@ describe('store tags', () => {
     const { user } = setup();
     const button = () => tagButton(FIRST.n);
 
-    expect(button()).toHaveTextContent('–');
+    expect(button()).toHaveTextContent('+');
     await user.click(button());
     expect(button()).toHaveTextContent('S');
     await user.click(button());
@@ -153,7 +153,7 @@ describe('store tags', () => {
     await user.click(button());
     expect(button()).toHaveTextContent('L');
     await user.click(button());
-    expect(button()).toHaveTextContent('–');
+    expect(button()).toHaveTextContent('+');
   });
 
   it('names the item and its tag, so 60 rows are not 60 identical buttons', () => {
@@ -168,7 +168,7 @@ describe('store tags', () => {
     // store tag.
     const { user } = setup({ ...emptyGrocState(), store: { [FIRST.id]: 'L' } });
     await user.click(tagButton(FIRST.n));
-    expect(tagButton(FIRST.n)).toHaveTextContent('–');
+    expect(tagButton(FIRST.n)).toHaveTextContent('+');
   });
 });
 

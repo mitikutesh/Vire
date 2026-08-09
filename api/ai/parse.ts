@@ -75,6 +75,38 @@ export function sanitiseItems(json: unknown, weekday: number): unknown {
   return { ...day, items: kept };
 }
 
+/**
+ * Rewrite the dashes models reach for in prose.
+ *
+ * Every generated meal name, step and ingredient is copy the user reads, so it
+ * has to sound like the rest of the app. An em dash between clauses is the
+ * clearest tell that a machine wrote the line, and no prompt wording suppresses
+ * it reliably. Doing it here, at the one boundary model text crosses, means the
+ * UI cannot render a dash the hand-written copy would never use.
+ *
+ * A dash *between digits* is a range ("5–7 min"), not punctuation, so it becomes
+ * a plain hyphen instead of a sentence break.
+ */
+export function deDash(value: string): string {
+  return value
+    .replace(/(\d)\s*[—–]\s*(\d)/g, '$1-$2')
+    .replace(/\s*—\s*/g, ', ')
+    .replace(/\s+–\s+/g, ', ')
+    .replace(/–/g, '-');
+}
+
+/** Apply {@link deDash} to every string in a parsed response, at any depth. */
+export function deDashDeep<T>(value: T): T {
+  if (typeof value === 'string') return deDash(value) as T;
+  if (Array.isArray(value)) return value.map(deDashDeep) as T;
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, inner]) => [key, deDashDeep(inner)]),
+    ) as T;
+  }
+  return value;
+}
+
 export function parseDay(text: string, weekday: number): GeneratedDay {
   let json: unknown;
   try {
@@ -86,7 +118,7 @@ export function parseDay(text: string, weekday: number): GeneratedDay {
     );
   }
 
-  const parsed = generatedDaySchema.safeParse(sanitiseItems(json, weekday));
+  const parsed = generatedDaySchema.safeParse(deDashDeep(sanitiseItems(json, weekday)));
   if (!parsed.success) {
     // The message names the failing paths, so a log says *what* drifted rather
     // than only that something did.
@@ -97,7 +129,7 @@ export function parseDay(text: string, weekday: number): GeneratedDay {
 }
 
 export function parseOfferScan(text: string): OfferScanResult {
-  const parsed = offerScanResultSchema.safeParse(extractJson(text));
+  const parsed = offerScanResultSchema.safeParse(deDashDeep(extractJson(text)));
   if (!parsed.success) {
     // An unvalidated scan could badge an item with an invented store code, or
     // show a price the model never actually found.

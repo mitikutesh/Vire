@@ -98,7 +98,7 @@ export const EX: readonly [Exercise, Exercise, Exercise, Exercise, Exercise, Exe
   { n: 'Cycling or swimming', min: 40, k: 300 },
   { n: 'Strength training', min: 30, k: 200 },
   { n: 'Long walk outdoors', min: 60, k: 300 },
-  { n: 'Rest — easy stretching', min: 20, k: 80 },
+  { n: 'Rest and easy stretching', min: 20, k: 80 },
 ];
 
 /** One-tap additions for movement that wasn't on the plan. */
@@ -130,11 +130,11 @@ export const exerciseFor = (wd: WeekdayIndex): Exercise => EX[wd];
  * line, where they apply to every day rather than one.
  */
 export const THEMES: readonly [string, string, string, string, string, string, string] = [
-  'Finnish classic comfort — familiar home cooking, something warm at midday',
-  'Legume-forward — beans, lentils or peas carry one of the main meals',
-  'Bowls and wholegrain pasta — tinned or smoked fish as the protein',
+  'Finnish classic comfort: familiar home cooking, something warm at midday',
+  'Legume-forward: beans, lentils or peas carry one of the main meals',
+  'Bowls and wholegrain pasta with tinned or smoked fish as the protein',
   'Nordic dairy and a traditional Finnish soup',
-  'Vegetarian dinner — no meat and no fish in the evening meal',
-  'Fresh fish day — trout, salmon or herring, simply cooked',
-  'Weekend cooking — something slower: a roast, a bake or a stew',
+  'Vegetarian dinner: no meat and no fish in the evening meal',
+  'Fresh fish day: trout, salmon or herring, simply cooked',
+  'Weekend cooking, something slower: a roast, a bake or a stew',
 ];

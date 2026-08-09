@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Check, Loader2, Sparkles, X } from 'lucide-react';
+import { Check, Loader2, X } from 'lucide-react';
 import { ApiError, PlanGenerationError, type VireApi } from '@/api/types';
 import { DAY_NAMES, t } from '@/content/strings';
 import { WEEKDAYS, type WeekdayIndex } from '@/domain/constants';
@@ -148,14 +148,7 @@ export function PlanGate({
   ) : null;
 
   return (
-    <main className="bg-paper flex min-h-screen flex-col items-center gap-4 px-5 pt-10 text-center">
-      <span
-        className="bg-cloud-soft flex items-center justify-center rounded-full"
-        style={{ width: 74, height: 74 }}
-      >
-        <Sparkles size={30} className="text-cloud" aria-hidden="true" />
-      </span>
-
+    <main className="bg-paper flex min-h-screen flex-col items-center gap-4 px-5 pt-16 text-center">
       <h1 className="disp text-ink font-extrabold" style={{ fontSize: 26 }}>
         {replacing ? t.planGate.replaceTitle : t.planGate.title}
       </h1>
@@ -187,7 +180,7 @@ export function PlanGate({
               disabled={busy}
               className="bg-ink flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              <Sparkles size={16} aria-hidden="true" /> {t.planGate.generate}
+              {t.planGate.generate}
             </button>
           ) : null}
           <button

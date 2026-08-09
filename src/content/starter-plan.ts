@@ -39,7 +39,7 @@ export const STARTER_DAYS: readonly [
       ],
       st: [
         'Bring oats and liquid to a gentle simmer, stirring.',
-        'Cook 5–7 min until creamy; season with salt and cinnamon.',
+        'Cook 5-7 min until creamy; season with salt and cinnamon.',
         'Top with blueberries and walnuts.',
       ],
       yt: 'creamy oatmeal porridge blueberries',
@@ -63,7 +63,7 @@ export const STARTER_DAYS: readonly [
       ],
       st: [
         'Simmer potatoes, carrot and leek in the stock ~10 min.',
-        "Add salmon and cook gently 5 min — don't let it boil hard.",
+        "Add salmon and cook gently 5 min; don't let it boil hard.",
         'Stir in oat cream and dill; serve with rye bread.',
       ],
       yt: 'lohikeitto finnish salmon soup recipe',
@@ -85,7 +85,7 @@ export const STARTER_DAYS: readonly [
       ],
       st: [
         'Heat oven to 200 °C; toss everything with oil and seasoning.',
-        'Spread on a tray and roast 30–35 min until the chicken is cooked through.',
+        'Spread on a tray and roast 30-35 min until the chicken is cooked through.',
         'Rest 5 min, then plate.',
       ],
       yt: 'chicken vegetable tray bake healthy',
@@ -114,7 +114,7 @@ export const STARTER_DAYS: readonly [
         'tomato & cucumber slices',
       ],
       st: [
-        'Boil the egg 8–9 min; cool and slice.',
+        'Boil the egg 8-9 min; cool and slice.',
         'Spread the bread thinly; layer egg and vegetables.',
         'Finish with black pepper.',
       ],
@@ -319,7 +319,7 @@ export const STARTER_DAYS: readonly [
         'pinch of salt',
       ],
       st: [
-        'Simmer the oats in milk 5–7 min.',
+        'Simmer the oats in milk 5-7 min.',
         'Stir in the peanut butter off the heat.',
         'Top with banana.',
       ],
@@ -494,7 +494,7 @@ export const STARTER_DAYS: readonly [
       ],
       st: [
         'Heat oven to 200 °C; toss everything with oil and herbs.',
-        'Roast 30–35 min until golden.',
+        'Roast 30-35 min until golden.',
         'Rest briefly and serve.',
       ],
       yt: 'roast chicken vegetables one pan',
@@ -517,7 +517,7 @@ export const STARTER_DAYS: readonly [
       st: [
         'Cook the barley per the pack.',
         'Simmer onion, garlic, pepper and tomatoes 8 min.',
-        'Add fish chunks; poach 5–6 min; serve over barley.',
+        'Add fish chunks; poach 5-6 min; serve over barley.',
       ],
       yt: 'mediterranean fish stew tomato',
     },

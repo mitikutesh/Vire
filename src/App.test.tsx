@@ -354,6 +354,6 @@ describe('App shell', () => {
   it('shows the pantry-staple hint on staple items', async () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Shop' }));
-    expect(screen.getAllByText(/pantry staple — skip if you have it/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/pantry staple, skip if you have it/).length).toBeGreaterThan(0);
   });
 });

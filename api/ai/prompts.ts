@@ -12,6 +12,17 @@ import type { DayConfig, OfferScanRequest } from './types';
  * and tool syntax; this file owns what is asked.
  */
 
+/**
+ * House style for every generated string.
+ *
+ * The app's own copy has no em dashes in it, and a meal name that arrives with
+ * one reads as machine-written next to the hand-written text around it.
+ * `deDash` in parse.ts is the guarantee; this is the cheap first pass.
+ */
+export const NO_DASH_RULE =
+  ' Never use em dashes or en dashes in any string: write plain sentences with' +
+  ' commas, full stops or semicolons, and a plain hyphen for number ranges.';
+
 /** Per-slot kcal budgets, rounded to 10, from the daily target. */
 export function slotBudgets(target: number): Record<string, number> {
   return Object.fromEntries(
@@ -51,7 +62,8 @@ export function dayGenerationPrompt(config: DayConfig): string {
     ' steps and no yt; items lists EVERY purchasable ingredient of the day as' +
     ' [finnishShopName, EnglishName, cat, quantity, optional 1 if a pantry staple such as oil' +
     ' or spice], where cat is exactly one of fish|dairy|produce|grain|pantry, at most 16 items' +
-    ' (merge similar ones). Keep every string short.'
+    ' (merge similar ones). Keep every string short.' +
+    NO_DASH_RULE
   );
 }
 
@@ -71,7 +83,8 @@ export function offerScanPrompt({ items, city, today }: OfferScanRequest): strin
     ' Step 3: report only real current offers you actually found — an empty list is the correct' +
     ' answer if there are none. Never guess a price. store is exactly S, K or L; at most 15' +
     ' deals; each deal text under 8 words, including the price when known; note is one short' +
-    ' sentence on where the best savings are this week.'
+    ' sentence on where the best savings are this week.' +
+    NO_DASH_RULE
   );
 }
 

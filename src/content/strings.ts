@@ -14,10 +14,10 @@ import { WATER } from './plan';
 
 /** Slot labels and the rough time each one lands. */
 export const SLOT_LABEL = {
-  b: { label: 'Breakfast', hint: '≈ 7–9' },
-  l: { label: 'Lunch', hint: '≈ 11:30–13' },
+  b: { label: 'Breakfast', hint: '≈ 7-9' },
+  l: { label: 'Lunch', hint: '≈ 11:30-13' },
   s: { label: 'Afternoon snack', hint: '≈ 15' },
-  d: { label: 'Dinner', hint: '≈ 17:30–19' },
+  d: { label: 'Dinner', hint: '≈ 17:30-19' },
   e: { label: 'Evening bite', hint: '≈ 20:30' },
 } as const;
 
@@ -73,15 +73,15 @@ export const t = {
       // An unknown address and a wrong password must be indistinguishable, or
       // anyone can discover which addresses have accounts here. If you are
       // adding an error code, do not reintroduce one.
-      wrongPassword: 'Wrong password — try again.',
-      emailTaken: 'That email already has an account — sign in instead.',
+      wrongPassword: 'Wrong password. Try again.',
+      emailTaken: 'That email already has an account. Sign in instead.',
       // PRODUCTION: registration is invite-only so strangers cannot spend the
       // household's AI budget (PLAN §2, decision 4).
-      inviteOnly: 'This Vire is invite-only — ask the owner to add your email.',
+      inviteOnly: 'This Vire is invite-only. Ask the owner to add your email.',
       unverified: 'Check your inbox and confirm your email address first.',
       googleUnavailable:
-        'Google sign-in isn’t set up on this Vire yet — use your email and password.',
-      wrongCode: "That code doesn't match — check the email and try again.",
+        'Google sign-in isn’t set up on this Vire yet. Use your email and password.',
+      wrongCode: "That code doesn't match. Check the email and try again.",
       expiredCode: 'That code has expired. Send a new one below.',
       rateLimited: 'Too many attempts. Wait a minute, then try again.',
       network: 'No connection. Check your network and try again.',
@@ -94,8 +94,8 @@ export const t = {
     // Cognito reported no delivery. Saying "check your email" here would send
     // someone hunting for a message that was never sent.
     confirmNotSent:
-      'Your account was created, but no confirmation email was sent — so there may be nothing to look for. Try "Send a new code" below; if that doesn’t arrive either, check the spam folder and the email settings on the user pool.',
-    confirmCheckSpam: 'Not arrived? It comes from no-reply@verificationemail.com — check spam.',
+      'Your account was created, but no confirmation email was sent, so there may be nothing to look for. Try "Send a new code" below; if that doesn’t arrive either, check the spam folder and the email settings on the user pool.',
+    confirmCheckSpam: 'Not arrived? It comes from no-reply@verificationemail.com, so check spam.',
     codeLabel: 'Confirmation code',
     codePlaceholder: '6-digit code',
     confirmAction: 'Confirm my email',
@@ -109,8 +109,8 @@ export const t = {
     newPasswordLabel: 'New password',
     resetConfirmAction: 'Set new password',
     // PRODUCTION: real flows, so the prototype's explanatory notes are gone.
-    resetSent: 'Password reset sent — check your inbox.',
-    verifySent: 'Confirmation email sent — check your inbox.',
+    resetSent: 'Password reset sent. Check your inbox.',
+    verifySent: 'Confirmation email sent. Check your inbox.',
   },
 
   settings: {
@@ -141,7 +141,7 @@ export const t = {
     allergiesPlaceholder: 'e.g. peanuts, shellfish',
     // Health guardrail 3 — must survive any rewrite (PLAN §7).
     allergiesNote:
-      "Generated plans exclude these — but always double-check product labels; don't rely on this alone for severe allergies.",
+      "Generated plans exclude these, but always double-check product labels; don't rely on this alone for severe allergies.",
     waterGoal: 'Water goal (ml)',
 
     targetFirstRun: 'Your daily target',
@@ -173,7 +173,7 @@ export const t = {
     deleteConfirmWord: 'DELETE',
     deleteConfirmAction: 'Delete everything',
     deleteCancel: 'Keep my account',
-    deleteFailed: 'Couldn’t delete the account. Nothing was removed — try again.',
+    deleteFailed: 'Couldn’t delete the account. Nothing was removed, so try again.',
     // The half-done case: the data really is gone, so the copy must not claim
     // otherwise. Retrying finishes closing the account.
     deletePartial:
@@ -183,7 +183,7 @@ export const t = {
     // else's generation.
     aiKeySection: 'AI key',
     aiKeyBlurb:
-      'Vire generates your week with your own Anthropic or OpenAI key, so the cost is yours and nobody else’s. Without one, the built-in Finnish starter plan still works — you just can’t generate a new week or scan for offers.',
+      'Vire generates your week with your own Anthropic or OpenAI key, so the cost is yours and nobody else’s. Without one, the built-in Finnish starter plan still works; you just can’t generate a new week or scan for offers.',
     aiKeyProvider: 'Provider',
     aiKeyAnthropic: 'Anthropic (Claude)',
     aiKeyOpenai: 'OpenAI',
@@ -196,7 +196,7 @@ export const t = {
     aiKeyUnset: 'No key saved yet.',
     // Says plainly that it cannot be read back, so nobody hunts for a reveal
     // button that deliberately does not exist.
-    aiKeyWriteOnly: 'Stored encrypted and never shown again — replace it if you lose it.',
+    aiKeyWriteOnly: 'Stored encrypted and never shown again, so replace it if you lose it.',
     aiKeyFailed: 'Couldn’t save that key. Check it and try again.',
 
     signOut: 'Sign out',
@@ -232,7 +232,7 @@ export const t = {
     noKeyBlurb:
       'Generating a week uses your own Anthropic or OpenAI key. Add one in Settings, or start with the built-in Finnish starter plan.',
     noKeyAction: 'Open Settings',
-    errorNoKey: 'That needs an AI key — add one in Settings, or use the starter plan.',
+    errorNoKey: 'That needs an AI key. Add one in Settings, or use the starter plan.',
     // Health guardrail 3: the starter plan is NOT allergy-adjusted, and says so
     // at both points it is offered (idle and error).
     starter: (hasAllergies: boolean) =>
@@ -241,21 +241,21 @@ export const t = {
       }`,
     starterAfterError: (hasAllergies: boolean) =>
       `Use the starter plan instead${hasAllergies ? ' (not adjusted for your allergies)' : ''}`,
-    generatingNote: 'Cooking up your week — the grocery list assembles itself right after.',
+    generatingNote: 'Cooking up your week. The grocery list assembles itself right after.',
     // Regenerating rather than first run: the heading must not claim there is no
     // plan, because there is one and it is about to be replaced.
     replaceTitle: 'Swap in a fresh week',
     replaceBlurb:
-      "Your current week stays put until the new one is ready — nothing is lost if this doesn't work out.",
+      "Your current week stays put until the new one is ready, so nothing is lost if this doesn't work out.",
     keepCurrent: 'Keep my current week',
     error:
-      "Some days didn't come back right — it happens. Try again, or start from the built-in plan.",
+      "Some days didn't come back right. It happens. Try again, or start from the built-in plan.",
     // The write failed after every day generated. Retrying is genuinely likely
     // to work, so the copy says so rather than blaming the meals.
     errorNotSaved: 'Your week came out fine but it did not save. Try again.',
     // Distinct from the generic error: retrying immediately is the right move,
     // because nothing about the plan was wrong.
-    errorDropped: 'The connection dropped mid-plan. Nothing was lost — try again.',
+    errorDropped: 'The connection dropped mid-plan. Nothing was lost, so try again.',
     errorRateLimited:
       "That's a lot of plans for one day. Try again tomorrow, or start from the built-in plan.",
     retry: 'Try again',
@@ -273,7 +273,7 @@ export const t = {
   log: {
     // The optimistic write was rolled back: the tap is visibly undone, and this
     // says why so the user does not assume it stuck.
-    saveFailed: 'That didn’t save — check your connection and tap again.',
+    saveFailed: 'That didn’t save. Check your connection and tap again.',
     dismiss: 'Dismiss',
   },
 
@@ -286,19 +286,19 @@ export const t = {
       evening: 'Good evening',
     },
     header: (greeting: string, firstName: string, dayName: string, date: Date) =>
-      `${greeting}${firstName ? `, ${firstName}` : ''} — ${dayName} ${date.getDate()}.${
+      `${greeting}${firstName ? `, ${firstName}` : ''} · ${dayName} ${date.getDate()}.${
         date.getMonth() + 1
       }.`,
     nightTitle: 'The day is done.',
     rightNow: (slotLabel: string) => `Right now: ${slotLabel.toLowerCase()}`,
-    nightCardTitle: "Kitchen's closed — time to rest.",
+    nightCardTitle: "Kitchen's closed. Time to rest.",
     nightCardBody: 'Tomorrow’s breakfast:',
     nowChip: (hint: string) => `now · ${hint}`,
     markEaten: 'Mark as eaten',
-    eaten: 'Eaten — nicely done',
-    eatenSwapped: (kcal: number) => `Eaten — ${kcal} kcal logged`,
+    eaten: 'Eaten, nicely done',
+    eatenSwapped: (kcal: number) => `Eaten · ${kcal} kcal logged`,
     moveNudge: (exercise: string, min: number) =>
-      `Good window for today's ${exercise.toLowerCase()} — ${min} min.`,
+      `Good window for today's ${exercise.toLowerCase()}, ${min} min.`,
     kcalLeft: 'kcal left',
     kcalOver: 'over',
     ofTarget: (target: number) => `of ${target}`,
@@ -332,7 +332,7 @@ export const t = {
     waterProgressAria: (glasses: number, goal: number) => `${glasses} of ${goal} glasses`,
 
     waterGoal: (glasses: number) =>
-      `Water — aim for ${glasses} glasses (≈ ${
+      `Water: aim for ${glasses} glasses (≈ ${
         Math.round(glasses * (WATER.glassMl / 1000) * 10) / 10
       } L)`,
     waterLessAria: 'One less glass',
@@ -353,21 +353,21 @@ export const t = {
     // I3: history navigation.
     prevDayAria: 'Previous day',
     nextDayAria: 'Next day',
-    readOnly: 'Past day — logging is closed.',
+    readOnly: 'Past day. Logging is closed.',
     backToToday: 'Back to today',
     dayHeading: (dayName: string, date: Date) =>
       `${dayName} ${date.getDate()}.${date.getMonth() + 1}.`,
   },
 
   week: {
-    subtitle: 'The map of the week — tap a day to peek.',
+    subtitle: 'The map of the week. Tap a day to peek.',
     title: 'This week',
     todayBadge: 'today',
     move: 'Move',
     averageNote: (avg: number, starter: boolean) =>
       `Weekly average ≈ ${avg} kcal/day${
         starter ? ', from the built-in Finnish starter plan' : ', generated for your profile'
-      } — fish, oats, rye, legumes and plenty of vegetables: the cholesterol-friendly core.`,
+      }. Fish, oats, rye, legumes and plenty of vegetables: the cholesterol-friendly core.`,
     // I1: weight trend lives here.
     weightTrendTitle: 'Weight',
     weightCurrentToGoal: (current: number, goal: number) => `${current} kg → ${goal} kg`,
@@ -386,7 +386,7 @@ export const t = {
   },
 
   shop: {
-    subtitle: 'Everything the week’s menu needs — for one person.',
+    subtitle: 'Everything the week’s menu needs, for one person.',
     title: 'Groceries',
 
     areaLabel: 'Your area',
@@ -398,7 +398,7 @@ export const t = {
     offersTitle: "This week's offers",
     offersRefreshAria: 'Refresh offers',
     offersScanning:
-      'Scanning s-kaupat, K-Ruoka and Lidl for current discounts — takes about 20 seconds…',
+      'Scanning s-kaupat, K-Ruoka and Lidl for current discounts. Takes about 20 seconds…',
     offersRefreshing: 'Refreshing the offer scan…',
     offersError:
       "Couldn't fetch offers right now. Tap the arrow to retry, or use the deals links above.",
@@ -425,7 +425,7 @@ export const t = {
     filterEmpty: 'Nothing assigned to that store yet.',
     tagHint:
       'Tap the round tag on an item to assign it to a store chain (S → K → Lidl). Tap S / K links to check its live price.',
-    staple: ' · pantry staple — skip if you have it',
+    staple: ' · pantry staple, skip if you have it',
     checkAria: 'Check',
     uncheckAria: 'Uncheck',
     // Names the item and its current tag: with 60 rows, "Assign store" alone
