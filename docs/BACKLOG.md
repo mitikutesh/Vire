@@ -1,17 +1,22 @@
 # Vire — Product Backlog
 
-## Implementation status (updated 2026-08-08)
+## Implementation status (updated 2026-08-09)
 
-**Milestones M0 through M4 are complete**, plus E5.3 and E7.6. 648 unit tests and an
+**Milestones M0 through M4 are complete**, plus E5.3 and E7.6. 694 unit tests and an
 end-to-end test in real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
-typecheck, format and the static build are clean; one commit per story. Nothing
-has run against AWS yet — see the owner actions below.
+typecheck, format and the static build are clean; one commit per story.
+
+**Deployed to AWS prod on 2026-08-09** via the OIDC workflow, so the owner
+actions below are done: the site, the Function URL and the table are live. What
+is still unverified is everything that needs a _real_ provider key or a real
+Cognito round-trip in a browser — a generated week, an offer scan, a Google
+sign-in.
 
 | Story                             | State      | Note                                                                                          |
 | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
 | E0.1 Repo scaffold & CI/CD        | ✅ done    | CI + OIDC deploy workflow                                                                     |
-| E0.2 AWS infrastructure (SST)     | ✅ done    | Declared, **not yet deployed**                                                                |
+| E0.2 AWS infrastructure (SST)     | ✅ done    | Deployed to prod 2026-08-09                                                                   |
 | E0.3 Design tokens & typography   | ✅ done    |                                                                                               |
 | E0.4 Strings & static content     | ✅ done    |                                                                                               |
 | E0.5 Accessible UI kit + M0 shell | ✅ done    | I4 nesting defect fixed                                                                       |
@@ -26,14 +31,16 @@ has run against AWS yet — see the owner actions below.
 | E2.3 → E5.4                       | ⬜ next    | Implementable locally; see below                                                              |
 | E6.1 → E6.4 (iOS)                 | 🔒 blocked | Needs Xcode, an Apple Developer account and a device/TestFlight                               |
 | E7.5 Kesko API                    | ❌ closed  | Portal admits only Azure AD identities Kesko onboards — no route for an individual (PLAN §12) |
+| E7.7 Prep lead times              | ⬜ planned | Owner request; AI annotates at generation time, guardrail 7                                   |
+| E7.8 Head-start + evening digest  | ⬜ planned | Owns scheduling for every channel; never fires at night                                       |
+| E7.9 Calendar subscription feed   | ⬜ planned | Precedes E5.2 Web Push — see PLAN §5a revision                                                |
 
-**Owner actions that unblock end-to-end verification.** Everything above is
-verified by unit and component tests only — nothing has run against AWS. To get
-past that: run the one-time OIDC bootstrap in `docs/CICD.md`, set the three
-secrets listed in the README, then `npx sst deploy --stage prod`. Until then the
-auth, generation and offer-scan stories can be written and unit-tested but their
-end-to-end acceptance criteria (a real Cognito sign-in, a real generated week, a
-real offer scan) cannot be checked.
+**What is still unverified.** The OIDC bootstrap, the secrets and
+`sst deploy --stage prod` are all done, and CI has deployed green twice. What
+tests cannot reach is the set of acceptance criteria that need a real third
+party: a Cognito sign-in in a browser, a week generated with a real provider
+key, and a real offer scan. Those stay open until the owner walks them once on
+the deployed site.
 
 ---
 
@@ -656,3 +663,151 @@ generation.
 - Deferred: a customer-managed KMS key on the table. Retrofitting encryption onto
   an already-deployed table risks replacement, so it is a decision to take
   deliberately rather than a change to slip in (PLAN §4b).
+
+### E7.7 — Prep lead times on generated meals (M) ← owner request
+
+Meals that need a head start say so in the plan, so the app can answer _when to
+start_ rather than only what to cook. A lunch built on dried beans is not a
+noon problem, it is a 21:00-yesterday problem, and nothing in the plan currently
+knows that.
+
+- AC: `prep` is an optional array of stages on a meal —
+  `{ lead: minutes before serving, active: hands-on minutes, do: string,
+elastic: boolean }`.
+  **Staged, not a single number**: soaking is eight hours of waiting and three
+  minutes of attention, and one figure cannot say both. The user needs `lead` to
+  know when to start and `active` to know whether they can fit it in.
+- AC: **`elastic` is what makes the evening digest correct** (E7.8). Soaking,
+  marinating and fridge-thawing can start hours earlier than ideal with no harm,
+  so they can be pulled back to the previous evening. Taking a roast out to come
+  to room temperature, or boiling pasta, cannot: doing those eight hours early is
+  either useless or unsafe. Without this flag the scheduler has no way to tell
+  "start this tonight instead" from "start this in the middle of the night",
+  and would have to guess on exactly the cases where guessing wrong spoils food.
+- AC: **the generator avoids meals nobody can cook.** The prompt constrains
+  generated days so no meal needs a _rigid_ stage to begin between 23:00 and
+  07:00, given the slot serve times. Preventing the case is better than handling
+  it, and the constraint is cheap: it rules out a small tail of recipes, not a
+  cuisine. If it ever collides with a day theme or the cholesterol-friendly
+  constraints, the theme yields — a meal the cook has to set an alarm for at
+  03:00 is not a meal this app should have suggested.
+- AC: optional, so the plan schema stays `v: 1` and every stored plan already out
+  there reads as "no prep needed" rather than breaking.
+- AC: **the model annotates during the generation call it already makes.** No
+  runtime AI, no second provider round-trip, no added latency, and the answer
+  works offline forever after. A keyword table in code cannot tell dried
+  chickpeas from tinned — which is the entire distinction the feature rests on —
+  and the ingredient text is a Finnish/English mix that makes matching worse.
+- AC: **clamped at the parse boundary**, like every other field of model output
+  (`api/ai/parse.ts`): at most 3 stages, `lead` ≤ 24 h, `active` ≤ `lead`,
+  `do` ≤ 60 chars. A stage that violates these is dropped; the day survives.
+  Model output is untrusted input here exactly as it is everywhere else.
+- AC (guardrail 7): thawing is refrigerator-only, and no fish, meat or dairy is
+  held at room temperature. Prompt rule plus a standing line wherever prep is
+  shown. See PLAN §7.7 for why this guardrail is different in kind from the rest.
+- AC: the starter week carries hand-authored `prep` — it is curated, not
+  generated, so it cannot inherit the annotations for free.
+- AC: a one-shot backfill annotates the _active_ week in a single call, so nobody
+  has to regenerate a week they are happy with just to gain the feature.
+
+### E7.8 — Head-start scheduling and the evening digest (M)
+
+The in-app surface, and the scheduling rules every delivery channel obeys.
+Ships before E7.9 because it needs no delivery mechanism at all, and because it
+owns the logic the calendar feed renders — there is one scheduler, not one per
+channel.
+
+**The rule that shapes the whole design (owner directive, 2026-08-09).**
+
+A twelve-hour lead on a 12:00 lunch computes to a 00:00 start. Firing then is
+worse than not firing: it wakes someone for a task they will not do, and it
+teaches them to silence the app. The naive fix — clamp it forward into waking
+hours — is worse still, because moving a reminder **later** means the food is
+late. A 04:00 soak pushed to 07:00 is lunch at 15:00.
+
+So the scheduler never moves a reminder later. It only ever moves it **earlier**,
+and the earliest useful moment is the evening before.
+
+**Scheduling rules, in order:**
+
+1. `serve` comes from `DAY_STRIP.dots` (b 7.5, l 12, s 15, d 18.2, e 20.5) —
+   already the app's single source of truth for when a meal lands. No second
+   table to drift out of step with the DayStrip.
+2. `idealStart = serve − max(stage.lead) − buffer`. Buffer defaults to 60 min
+   and is settable; the owner's stated want is an hour or two of slack to move
+   things around, not a just-in-time alarm.
+3. If `idealStart` falls inside the **prep window** (`PREP_WINDOW`, default
+   07:00–22:30, settable), it is a same-day reminder at that time. Note this is
+   deliberately narrower than `SLOT_BOUNDS.dayStart` (05:00) and
+   `GREETING_BOUNDS.quietUntil` — the app is willing to _greet_ you at 05:30,
+   which is not the same as being willing to _wake_ you.
+4. Otherwise the task moves to the **previous evening's digest** and its wording
+   changes from "start now" to "before bed" — because the user is being told at
+   20:30 about something whose ideal start is 00:00.
+5. A task may only be pulled backwards like this if every stage involved is
+   **elastic** (see E7.7): soaking, marinating and fridge-thawing are unharmed
+   or improved by starting earlier. A **rigid** stage cannot be, and a meal whose
+   rigid stage lands in the night is a meal the user cannot make on time.
+
+**The evening digest is the primary channel, not a fallback.**
+
+One predictable notification per day at a user-set time (default 20:30, after
+dinner and before bed) listing everything tomorrow needs a head start on. This
+is better than N scattered per-stage alarms on every axis that matters here:
+it is one interruption instead of several, it arrives at a time the user has
+chosen rather than one arithmetic picked, it is the same time every day so it
+becomes a habit rather than a surprise, and it structurally cannot land at
+04:00. Per-stage same-day reminders remain, but only for tasks that genuinely
+fall inside the prep window.
+
+This also matches the temperament the repo already commits to: it refuses
+streaks and badges because "a streak turns one bad Tuesday into a reason to
+give up." The same argument applies to interruptions.
+
+- AC: Now and Today show what needs starting and by when; the digest is the
+  same data rendered as one evening summary.
+- AC: **never fires inside the prep window's night.** This is the acceptance
+  criterion the owner asked for by name, and it holds for every channel.
+- AC: **reminders move earlier, never later.** A test asserts that no computed
+  time is ever after `idealStart`.
+- AC: a meal needing a **rigid** start inside the night is surfaced at _plan_
+  time — flagged on the Week view with an offer to swap that meal — never as a
+  notification anybody could act on. Telling someone at 20:30 that they must get
+  up at 03:00 is not a reminder, it is a problem to solve while they are still
+  choosing the week.
+- AC: **consolidated.** Tomorrow's lunch and dinner both needing a head start is
+  one entry, not two.
+- AC: silent once the meal is logged or swapped — reminding someone to prepare
+  food they have already eaten is the fastest way to teach them to ignore it.
+- AC: **breakfast is the hard case and gets its own tests.** Serving at 07:30
+  means almost _any_ lead pushes it into the previous evening, so breakfast prep
+  is effectively always a digest item. If that reads badly, the generator
+  constraint in E7.7 is the fix, not a scheduling hack.
+- AC: pure functions in `src/domain/`, unit tested. **Including both Europe/
+  Helsinki DST transitions**: on the March day that has 23 hours and the October
+  day that has 25, "eight hours before noon" is the case that silently breaks
+  naive arithmetic, and both directions need a test.
+
+### E7.9 — Calendar subscription feed (M)
+
+Real lock-screen and Watch alerts with no service worker, no permission prompt
+and no Home Screen install. See PLAN §5a for why this now precedes E5.2.
+
+- AC: `GET /calendar/<token>.ics` returns `text/calendar`: one `VEVENT` per prep
+  stage carrying a `VALARM`, covering the active week.
+- AC: **the token is the credential.** Calendar clients cannot authenticate, so
+  the URL is a long random per-user secret, revocable and reissuable from
+  Settings in one tap.
+- AC: the feed exposes **meal and prep times only**. Never weight, logs, targets
+  or account data — the blast radius of a leaked URL stays "someone knows when I
+  eat".
+- AC: stable `UID`s derived from plan id + weekday + slot + stage, so a refresh
+  updates events rather than duplicating them or re-firing alarms.
+- AC: `REFRESH-INTERVAL` / `X-PUBLISHED-TTL` hints set to an hour. A feed for a
+  reminder that is hours ahead does not need tighter polling, and the client
+  picks the rate regardless.
+- AC: no new AWS resource. It is one route on the Function URL already deployed,
+  reading one plan item — inside the free tier at any polling rate a client will
+  actually use.
+- AC: Settings shows the `webcal://` link with copy-to-clipboard and a plain
+  explanation of what subscribing does.

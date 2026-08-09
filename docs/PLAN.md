@@ -122,6 +122,36 @@ eval suite (E2.0), never a code rewrite. Mixed mode is supported by design
   **skip if the slot/exercise is already logged, skip the movement reminder on
   Sunday** (`wd !== 6`). Web Push via VAPID keys stored in SSM.
 
+**Revision (owner request, 2026-08-09): a calendar feed ships before Web Push.**
+
+The trigger was prep-ahead reminders — a lunch needing six hours of soaking has
+to be announced the evening before, which is precisely the case an in-app card
+cannot serve, because nobody opens a meal planner at 21:00 to find out about
+tomorrow. That made delivery urgent rather than M5 polish, and re-opened which
+mechanism comes first.
+
+Web Push is no longer the obvious first choice on this app's primary device:
+
+- On iOS it works **only** once the PWA is installed to the Home Screen
+  (16.4+), permission must come from a real tap, and Safari can drop the
+  subscription silently, so it needs re-subscribe handling. Vire has no service
+  worker yet, so E5.1 is a prerequisite.
+- A **subscribed `.ics` feed** reaches the same lock screen, and the Apple Watch,
+  with no install, no permission prompt and no service worker. Server-side it is
+  one authenticated GET returning `text/calendar`: no scheduler, no push
+  service, no subscription lifecycle.
+
+Neither option has meaningful running cost (the sweep is ~$0.004/mo; browser
+push services are free), so the decision is engineering effort and reliability,
+not money. Order is therefore: in-app card (E7.8) → calendar feed (E7.9) → Web
+Push (E5.2) for users who install the PWA and want real-time nudges.
+
+The calendar feed's one real trade-off is that **calendar clients cannot
+authenticate, so the feed URL is the credential.** Mitigated by a long random
+per-user token, revocable from Settings, over a feed that exposes meal times
+only — never weight, logs or account data. Recorded here because it is the one
+property Web Push would not have had.
+
 ## 4. Data model (DynamoDB single table)
 
 Keep the prototype's JSON shapes (CLAUDE.md: "keep shapes unless there's a
@@ -292,6 +322,17 @@ multi-week planning, calorie photo estimation.
 5. Offer scan labeled best-effort with timestamp + "verify with the S/K links."
 6. I1/I9/I11 health data surfaces carry "trend, not medical advice" wording;
    imported Health data is labeled with its source.
+7. **Prep-ahead advice is food-safety bounded (E7.7).** Generated `prep` stages
+   thaw in the refrigerator and never hold fish, meat or dairy at room
+   temperature. Enforced in the prompt and clamped at the parse boundary
+   (`lead` ≤ 24 h), with a standing line on prep surfaces.
+
+   Guardrail 7 exists because prep-ahead is the first feature where the model's
+   output is an instruction to _leave food out for hours_. "Take the salmon out
+   at 06:00 so it is ready by noon" is fluent, plausible, exactly what a model
+   optimising for "ready on time" will write, and a genuine hazard. Every other
+   guardrail here protects a number; this one protects the user from an
+   instruction.
 
 ## 8. Non-functional requirements
 
