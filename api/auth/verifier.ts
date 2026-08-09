@@ -47,11 +47,14 @@ export class CognitoTokenVerifier implements TokenVerifier {
         ...(typeof payload['email'] === 'string' ? { email: payload['email'] } : {}),
         ...(typeof payload.exp === 'number' ? { exp: payload.exp } : {}),
       };
-    } catch {
-      // Never echo the provider's reason: it distinguishes "expired" from
-      // "wrong signature", which is more than a caller needs to know. Not logged
-      // either — rejected tokens are routine, and logging each one would bury
-      // real failures.
+    } catch (error) {
+      // The *caller* never learns which of expired / wrong-signature / wrong-pool
+      // it was — that is more than they need. The log gets the error's class name
+      // only, which is no help to an attacker and the difference between "tokens
+      // are expiring normally" and "nothing is authenticating at all". Zero
+      // visibility here made a systemic auth failure indistinguishable from a
+      // first-time user, which cost real debugging time once already.
+      console.error(`Token rejected: ${error instanceof Error ? error.name : 'unknown reason'}`);
       throw new UnauthorizedError('Invalid or expired token');
     }
   }

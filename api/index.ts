@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { handle, streamHandle } from 'hono/aws-lambda';
 import { Resource } from 'sst';
 import { storedKeyProvider } from './ai/for-user';
@@ -23,7 +22,19 @@ import { weightRoutes } from './routes/weight';
  */
 const app = new Hono();
 
-app.use('*', cors());
+/**
+ * No CORS middleware here on purpose.
+ *
+ * The Lambda Function URL applies its own CORS (`url: { cors: true }` in
+ * sst.config.ts), and adding Hono's middleware on top made every response carry
+ * `Access-Control-Allow-Origin` twice. Browsers reject a duplicated value
+ * outright — and because every Vire request sends an `authorization` header,
+ * every request is preflighted, so *all* of them failed. curl does not mind
+ * duplicate headers, which is why /health looked healthy throughout.
+ *
+ * The Function URL's own configuration is the one to keep: it answers the
+ * preflight before the Lambda is invoked, so an OPTIONS request costs nothing.
+ */
 
 /**
  * Built once per container, not per request: the token verifier caches the pool's

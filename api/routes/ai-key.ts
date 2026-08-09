@@ -94,8 +94,12 @@ function unauthorizedOr500(c: any, error: unknown) {
   if (error instanceof SyntaxError) {
     return c.json({ error: 'invalid_json' }, 400);
   }
-  // Deliberately not `console.error(error)` with the request body in scope: an
-  // unexpected failure here must not be the thing that writes a key to CloudWatch.
-  console.error('AI key route failed');
+  // The error's name and message, never the error object or the request body: the
+  // body holds the key, and a logged body is a logged credential. A bare
+  // "route failed" with no reason was the first version, and it made a 500 here
+  // undiagnosable — validation failures are answered as 422 above, so nothing
+  // reaching this line carries the value that failed.
+  const reason = error instanceof Error ? `${error.name}: ${error.message}` : 'unknown';
+  console.error(`AI key route failed — ${reason}`);
   return c.json({ error: 'internal_error' }, 500);
 }
