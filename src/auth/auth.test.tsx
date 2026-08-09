@@ -457,3 +457,34 @@ describe('provider error mapping', () => {
     }
   });
 });
+
+describe('when the provider sent no code', () => {
+  it('says so, instead of sending the user hunting for an email', async () => {
+    // A pool whose email attribute is not auto-verified, or whose daily sending
+    // quota is spent, creates the account and delivers nothing. Saying "check your
+    // email" there makes a misconfiguration look like a slow inbox.
+    const client = Object.assign(new FakeAuthClient({ allowlist: OWNER }), {
+      signUp: async () => ({ status: 'needs_confirmation' as const }),
+    });
+    const { user } = setup(client);
+
+    await user.click(screen.getByRole('button', { name: t.auth.switchToSignUp }));
+    await fill(user, t.auth.emailLabel, OWNER);
+    await fill(user, t.auth.passwordLabel, PASSWORD);
+    await user.click(screen.getByRole('button', { name: t.auth.signUpAction }));
+
+    expect(await screen.findByText(t.auth.confirmNotSent)).toBeInTheDocument();
+    expect(screen.queryByText(t.auth.verifySent)).not.toBeInTheDocument();
+  });
+
+  it('says an email is on its way when the provider confirms one', async () => {
+    const { user } = setup(new FakeAuthClient({ allowlist: OWNER }));
+    await user.click(screen.getByRole('button', { name: t.auth.switchToSignUp }));
+    await fill(user, t.auth.emailLabel, OWNER);
+    await fill(user, t.auth.passwordLabel, PASSWORD);
+    await user.click(screen.getByRole('button', { name: t.auth.signUpAction }));
+
+    expect(await screen.findByText(t.auth.confirmSubtitle(OWNER))).toBeInTheDocument();
+    expect(screen.getByText(t.auth.verifySent)).toBeInTheDocument();
+  });
+});

@@ -91,6 +91,11 @@ export const t = {
     // Confirmation step: Cognito emails a code before the account works.
     confirmTitle: 'Check your email',
     confirmSubtitle: (email: string) => `We sent a confirmation code to ${email}.`,
+    // Cognito reported no delivery. Saying "check your email" here would send
+    // someone hunting for a message that was never sent.
+    confirmNotSent:
+      'Your account was created, but no confirmation email was sent — so there may be nothing to look for. Try "Send a new code" below; if that doesn’t arrive either, check the spam folder and the email settings on the user pool.',
+    confirmCheckSpam: 'Not arrived? It comes from no-reply@verificationemail.com — check spam.',
     codeLabel: 'Confirmation code',
     codePlaceholder: '6-digit code',
     confirmAction: 'Confirm my email',

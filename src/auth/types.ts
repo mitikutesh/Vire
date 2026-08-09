@@ -47,7 +47,16 @@ export class AuthError extends Error {
 }
 
 /** What a sign-up needs next before the account can be used. */
-export type SignUpOutcome = { status: 'confirmed' } | { status: 'needs_confirmation' };
+/**
+ * The result of creating an account.
+ *
+ * `deliveredTo` is what Cognito says it actually sent the code to — absent when it
+ * reports no delivery at all. That distinction matters: without it the app tells
+ * every new user "check your email" whether or not anything was sent, and a
+ * misconfigured pool is indistinguishable from a slow inbox.
+ */
+export type SignUpOutcome =
+  { status: 'confirmed' } | { status: 'needs_confirmation'; deliveredTo?: string | undefined };
 
 export interface AuthClient {
   /** The signed-in user, or null. Called on load to restore a session. */

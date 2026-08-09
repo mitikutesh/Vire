@@ -31,6 +31,8 @@ interface AuthViewProps {
 
 export function AuthView({ auth, onAuthed, googleEnabled = false }: AuthViewProps) {
   const [step, setStep] = useState<Step>('signIn');
+  /** Whether the provider confirmed it delivered a code. */
+  const [codeSent, setCodeSent] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -93,7 +95,11 @@ export function AuthView({ auth, onAuthed, googleEnabled = false }: AuthViewProp
       }
       // Keeps `password` deliberately: the confirm step signs in with it.
       setStep('confirm');
-      setNote(t.auth.verifySent);
+      // Cognito says whether it actually sent anything. Claiming "check your email"
+      // when it reported no delivery sends someone hunting for a message that does
+      // not exist — a misconfigured pool then looks exactly like a slow inbox.
+      setCodeSent(outcome.deliveredTo !== undefined);
+      setNote(outcome.deliveredTo ? t.auth.verifySent : '');
     });
 
   const submitConfirm = () =>
@@ -149,7 +155,7 @@ export function AuthView({ auth, onAuthed, googleEnabled = false }: AuthViewProp
   const subheading = {
     signIn: t.auth.signInSubtitle,
     signUp: t.auth.signUpSubtitle,
-    confirm: t.auth.confirmSubtitle(email.trim()),
+    confirm: codeSent ? t.auth.confirmSubtitle(email.trim()) : t.auth.confirmNotSent,
     resetRequest: t.auth.resetSubtitle,
     resetConfirm: t.auth.confirmSubtitle(email.trim()),
   }[step];

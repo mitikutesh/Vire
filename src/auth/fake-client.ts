@@ -88,7 +88,8 @@ export class FakeAuthClient implements AuthClient {
       confirmed: false,
       code: this.code,
     });
-    return { status: 'needs_confirmation' };
+    // A working pool reports where it sent the code; the fake stands in for one.
+    return { status: 'needs_confirmation', deliveredTo: normalized };
   }
 
   async confirmSignUp(email: string, code: string): Promise<void> {

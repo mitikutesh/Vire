@@ -131,7 +131,23 @@ export class CognitoAuthClient implements AuthClient {
         password,
         options: { userAttributes: { email } },
       });
-      return result.isSignUpComplete ? { status: 'confirmed' } : { status: 'needs_confirmation' };
+      if (result.isSignUpComplete) return { status: 'confirmed' };
+
+      // Cognito reports where it sent the code. Absent means it sent none — a
+      // pool whose email attribute is not auto-verified, or a sending quota
+      // already spent. Either way the user needs telling, rather than being sent
+      // to a code screen for a code that does not exist.
+      // Narrowed on the step: `codeDeliveryDetails` only exists on the
+      // confirm-sign-up branch of Amplify's union, which is exactly the branch we
+      // are in when a code should have gone out.
+      const destination =
+        result.nextStep.signUpStep === 'CONFIRM_SIGN_UP'
+          ? result.nextStep.codeDeliveryDetails?.destination
+          : undefined;
+      return {
+        status: 'needs_confirmation',
+        ...(destination ? { deliveredTo: destination } : {}),
+      };
     } catch (error) {
       // The pre-sign-up trigger's refusal arrives here as a Lambda validation
       // error; mapAuthError recognises it and returns `invite_only`.
