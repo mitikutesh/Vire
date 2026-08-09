@@ -2,7 +2,7 @@
 
 ## Implementation status (updated 2026-08-08)
 
-**Milestones M0 through M4 are complete**, plus E5.3 from M5. 616 unit tests and an
+**Milestones M0 through M4 are complete**, plus E5.3 and E7.6. 648 unit tests and an
 end-to-end test in real WebKit that walks sign-up, the profile form
 and the plan gate into the shell and expands a day in the Week tab; lint,
 typecheck, format and the static build are clean; one commit per story. Nothing
@@ -620,3 +620,39 @@ estimation.
 4. Password minimum raised to 8 chars (E1.1)
 5. Default generation model stays on the prototype's `claude-sonnet-4-6` until
    the E2.0 eval task compares current models
+
+---
+
+### E7.6 — Per-user AI provider key (L) ← owner request
+
+Users supply their own Anthropic or OpenAI key, so nobody funds anyone else's
+generation.
+
+- AC: the key lives in its own `AIKEY` item, never on the profile — the profile is
+  returned to the client on every load.
+- AC: **write-only.** No endpoint returns it; `GET /ai-key` answers
+  `{ set, provider }`. Excluded from the I6 export, deleted with the account, never
+  logged.
+- AC: generation and the offer scan build a provider per request from the caller's
+  key; without one they return 409 `no_ai_key` **before** spending a slice of the
+  daily allowance.
+- AC: without a key the app is fully usable on the starter week. The plan gate does
+  not offer generation at all and says why, rather than showing a button that can
+  only fail.
+- AC: key field in first-run setup and in Settings (owner decision); invite-only
+  stays (owner decision).
+- Done. Three things worth recording:
+  - **`deleteAll` used to derive its item list from `exportAll`.** Filtering the key
+    out of the export would therefore have left it behind on account deletion —
+    a credential nobody could reach and nobody could remove. They are now separate,
+    and both directions have tests that fail if the coupling returns.
+  - The plan gate has three states, not two: key, no key, and _not yet known_.
+    Guessing while the status loads flashes the wrong thing at the user, and
+    "add a key" shown to someone who has one is the worse guess.
+  - **The owner-level `AnthropicApiKey` and `OpenaiApiKey` secrets are gone**, along
+    with the env-based provider builders that read them. `SignupAllowlist` is the
+    only secret left — which is also two fewer values that must be set before a
+    deploy can succeed.
+- Deferred: a customer-managed KMS key on the table. Retrofitting encryption onto
+  an already-deployed table risks replacement, so it is a decision to take
+  deliberately rather than a change to slip in (PLAN §4b).

@@ -7,6 +7,7 @@ import type { DayPlan, Plan } from '@/domain/schema';
 import { UnauthorizedError, userIdFromClaims } from '../auth/identity';
 import { bearerToken, type TokenVerifier } from '../auth/verifier';
 import type { VireStore } from '../db/store';
+import type { ProviderForUser } from '../ai/for-user';
 import type { AiProvider, GeneratedDay } from '../ai/types';
 
 /**
@@ -46,8 +47,11 @@ const rateLimitDay = (now: Date): string => now.toISOString().slice(0, 10);
 export interface PlanRouteDeps {
   store: VireStore;
   verifier: TokenVerifier;
-  /** Built per request so a provider swap needs no redeploy of this file. */
-  provider: AiProvider;
+  /**
+   * Resolves the caller's own provider (E7.6). Null when they have not set a key,
+   * which is a 409 rather than a failure: the starter week needs no provider.
+   */
+  providerFor: ProviderForUser;
   now?: () => Date;
   /** Overridden to 0 in tests, so a retry test does not wait out the backoff. */
   retryDelayMs?: number;
@@ -92,7 +96,7 @@ function toDayPlan(generated: GeneratedDay): DayPlan {
 export function planRoutes({
   store,
   verifier,
-  provider,
+  providerFor,
   now = () => new Date(),
   retryDelayMs = RETRY_DELAY_MS,
 }: PlanRouteDeps) {
@@ -111,6 +115,11 @@ export function planRoutes({
     // Generation needs the target, the allergies and the body: without a profile
     // there is nothing to generate against.
     if (!profile) return c.json({ error: 'no_profile' }, 409);
+
+    // The caller's own key. Checked before the rate limit is spent: being unable
+    // to generate at all should not cost a slice of the daily allowance.
+    const provider = await providerFor(userId);
+    if (!provider) return c.json({ error: 'no_ai_key' }, 409);
 
     const used = await store.bumpRateLimit(userId, 'generate', rateLimitDay(now()));
     if (used > GENERATE_LIMIT_PER_DAY) {

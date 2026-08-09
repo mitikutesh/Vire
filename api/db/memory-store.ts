@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
-import { SK, SK_PREFIX, assertDateKey, pk, type UserId } from './keys';
+import type { AiKey, AiKeyStatus, DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
+import { SK, SK_PREFIX, UNEXPORTABLE_SK, assertDateKey, pk, type UserId } from './keys';
 import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore } from './store';
 
 /**
@@ -129,11 +129,31 @@ export class MemoryStore implements VireStore {
     return next;
   }
 
+  async getAiKey(userId: UserId): Promise<AiKey | null> {
+    return this.read<AiKey>(userId, SK.aiKey);
+  }
+
+  async putAiKey(userId: UserId, entry: AiKey): Promise<void> {
+    this.write(userId, SK.aiKey, entry);
+  }
+
+  async deleteAiKey(userId: UserId): Promise<void> {
+    this.partition(userId).delete(SK.aiKey);
+  }
+
+  async getAiKeyStatus(userId: UserId): Promise<AiKeyStatus> {
+    const entry = await this.getAiKey(userId);
+    return { set: entry !== null, provider: entry?.provider ?? null };
+  }
+
   async exportAll(userId: UserId): Promise<Record<string, unknown>[]> {
-    return [...this.partition(userId).entries()].map(([sk, item]) => ({
-      sk,
-      ...structuredClone(item as Record<string, unknown>),
-    }));
+    return (
+      [...this.partition(userId).entries()]
+        // The AI key is a billable credential; an export carrying it would be a way
+        // to exfiltrate one.
+        .filter(([sk]) => !UNEXPORTABLE_SK.includes(sk))
+        .map(([sk, item]) => ({ sk, ...structuredClone(item as Record<string, unknown>) }))
+    );
   }
 
   async deleteAll(userId: UserId): Promise<void> {

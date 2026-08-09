@@ -33,9 +33,13 @@ export default $config({
        Set with `npx sst secret set <Name> <value> --stage prod`. They land in
        SSM and are injected into the Lambda at runtime — never into the client
        bundle, and never into GitHub secrets. */
-    const anthropicApiKey = new sst.Secret('AnthropicApiKey');
-    const openaiApiKey = new sst.Secret('OpenaiApiKey');
-    /** Comma-separated allowlist of e-mails permitted to register. */
+    /**
+     * Comma-separated allowlist of e-mails permitted to register.
+     *
+     * The only secret left. Provider API keys used to live here too; users now
+     * bring their own (E7.6), so there is no deployment-wide key to hold — and one
+     * fewer value that must be set before a deploy can succeed.
+     */
     const signupAllowlist = new sst.Secret('SignupAllowlist');
 
     /* ─────────────────────────── data ─────────────────────────── */
@@ -96,7 +100,7 @@ export default $config({
       timeout: '15 minutes',
       url: { cors: true },
       streaming: true,
-      link: [table, anthropicApiKey, openaiApiKey, userPool, userPoolClient],
+      link: [table, userPool, userPoolClient],
       // Account deletion (I6) closes the Cognito user as well as its data. Scoped
       // to this pool and to that one action: nothing else here administers users.
       permissions: [
@@ -107,9 +111,9 @@ export default $config({
       ],
       environment: {
         VIRE_STAGE: $app.stage,
-        // Provider and model are configuration, not code: switching is an env
-        // change plus an eval run (PLAN §3a).
-        AI_PROVIDER: 'anthropic',
+        // The model is still the deployment's choice; the provider is whichever
+        // one the user's own key belongs to (E7.6). Unset means each provider's
+        // default, which is what the eval task tunes.
         AI_MODEL: 'claude-sonnet-4-6',
       },
     });

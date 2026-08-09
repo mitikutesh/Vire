@@ -32,6 +32,7 @@ function messageFor(error: unknown): string {
     return t.planGate.error;
   }
   if (error instanceof ApiError && error.status === 429) return t.planGate.errorRateLimited;
+  if (error instanceof ApiError && error.message === 'no_ai_key') return t.planGate.errorNoKey;
   return t.planGate.error;
 }
 
@@ -40,10 +41,23 @@ export function PlanGate({
   profile,
   onPlan,
   onKeepCurrent,
+  hasAiKey,
+  onOpenSettings,
 }: {
   api: VireApi;
   profile: Profile;
   onPlan: (plan: StoredPlan) => void;
+  /**
+   * Whether the user has set their own AI key (E7.6). Without one, generation is
+   * not offered at all — the starter week is the whole path, and the copy says why
+   * rather than presenting a button that can only fail.
+   *
+   * `undefined` means not known yet. Neither branch renders then: guessing either
+   * way shows the user something that flips under them a moment later, and "add a
+   * key" flashing at someone who has one is the worse of the two.
+   */
+  hasAiKey: boolean | undefined;
+  onOpenSettings: () => void;
   /**
    * Present only when a plan already exists, i.e. the user came here from
    * Settings to regenerate. Without an escape, a regenerate that fails or is
@@ -150,16 +164,32 @@ export function PlanGate({
       </p>
       {replacing ? <p className="text-sub max-w-xs text-xs">{t.planGate.replaceBlurb}</p> : null}
 
-      {phase === 'idle' ? (
-        <>
+      {phase === 'idle' && hasAiKey === false ? (
+        <div className="border-line bg-card flex flex-col gap-2 rounded-2xl border p-4">
+          <p className="text-ink text-sm font-semibold">{t.planGate.noKeyTitle}</p>
+          <p className="text-sub text-sm">{t.planGate.noKeyBlurb}</p>
           <button
             type="button"
-            onClick={() => void generate()}
-            disabled={busy}
-            className="bg-ink flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            onClick={onOpenSettings}
+            className="text-lake text-sm font-semibold"
           >
-            <Sparkles size={16} aria-hidden="true" /> {t.planGate.generate}
+            {t.planGate.noKeyAction}
           </button>
+        </div>
+      ) : null}
+
+      {phase === 'idle' ? (
+        <>
+          {hasAiKey === true ? (
+            <button
+              type="button"
+              onClick={() => void generate()}
+              disabled={busy}
+              className="bg-ink flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              <Sparkles size={16} aria-hidden="true" /> {t.planGate.generate}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void adoptStarter()}

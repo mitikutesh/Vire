@@ -39,7 +39,25 @@ export const SK = {
   rateLimit: (action: string, day: string) => `RL#${action}#${day}`,
   /** One item per push subscription endpoint. */
   push: (endpointHash: string) => `PUSH#${endpointHash}`,
+  /**
+   * The user's own AI provider key (E7.6).
+   *
+   * Its own item rather than a field on the profile, for two reasons: the profile
+   * is returned to the client on every load, and this must never leave the server;
+   * and a separate sort key is something `exportAll` can filter on, which is what
+   * keeps a billable third-party credential out of the I6 export.
+   */
+  aiKey: 'AIKEY',
 } as const;
+
+/**
+ * Sort keys that must never appear in an export.
+ *
+ * Deliberately a list rather than a convention: forgetting to exclude an item is
+ * how a data-export feature turns into a credential-exfiltration feature, and a
+ * list is something a test can assert against.
+ */
+export const UNEXPORTABLE_SK: readonly string[] = [SK.aiKey];
 
 /** Sort-key prefixes, for range queries over one kind of item. */
 export const SK_PREFIX = {

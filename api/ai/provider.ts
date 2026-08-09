@@ -1,16 +1,18 @@
 import { AnthropicProvider, ANTHROPIC_DEFAULT_MODEL } from './anthropic-provider';
 import { OpenAiProvider, OPENAI_DEFAULT_MODEL } from './openai-provider';
-import { OfferScanUnsupportedError, type AiProvider } from './types';
+import type { AiProvider } from './types';
 
 /**
- * Provider selection (PLAN §3a).
+ * Provider selection (PLAN §3a, revised by E7.6).
  *
- * Which vendor and model Vire uses is configuration, not code. `AI_PROVIDER`
- * and `AI_MODEL` pick the generation provider; `AI_PROVIDER_OFFERS` may name a
- * different one, because the offer scan needs live web search and the
- * generation path does not. That split is what makes Bedrock usable at all: it
- * can generate plans on an AWS-native bill with no separate key, but it has no
- * web-search tool, so offers must stay with a provider that does.
+ * The vendor is no longer the deployment's choice: each user brings their own API
+ * key, so the provider is whichever one that key belongs to. What remains
+ * configurable is the model.
+ *
+ * Both user-selectable providers have a live web-search tool, so the offer scan
+ * works on either. `canScanOffers` stays because Bedrock does not — it
+ * authenticates by AWS role rather than by key, which is also why it cannot be
+ * chosen here at all.
  */
 
 export const PROVIDER_IDS = ['anthropic', 'openai', 'bedrock'] as const;
@@ -19,12 +21,9 @@ export type ProviderId = (typeof PROVIDER_IDS)[number];
 /** Providers that can run the offer scan (i.e. have live web search). */
 export const WEB_SEARCH_PROVIDERS: readonly ProviderId[] = ['anthropic', 'openai'];
 
+/** The deployment's share of the AI configuration: the model, and nothing else. */
 export interface ProviderEnv {
-  AI_PROVIDER?: string | undefined;
   AI_MODEL?: string | undefined;
-  AI_PROVIDER_OFFERS?: string | undefined;
-  ANTHROPIC_API_KEY?: string | undefined;
-  OPENAI_API_KEY?: string | undefined;
 }
 
 export function parseProviderId(value: string | undefined, fallback: ProviderId): ProviderId {
@@ -46,73 +45,31 @@ export function canScanOffers(provider: ProviderId): boolean {
   return WEB_SEARCH_PROVIDERS.includes(provider);
 }
 
-function build(provider: ProviderId, model: string, env: ProviderEnv): AiProvider {
-  switch (provider) {
-    case 'anthropic': {
-      const key = env.ANTHROPIC_API_KEY;
-      if (!key) throw new Error('ANTHROPIC_API_KEY is not set');
-      return AnthropicProvider.fromApiKey(key, model);
-    }
-    case 'openai': {
-      const key = env.OPENAI_API_KEY;
-      if (!key) throw new Error('OPENAI_API_KEY is not set');
-      return OpenAiProvider.fromApiKey(key, model);
-    }
-    case 'bedrock':
-      // The adapter slot exists and the plan records the trade-off; there is no
-      // implementation yet, and pretending otherwise would fail at runtime in
-      // production instead of here at startup.
-      throw new Error(
-        'The Bedrock adapter is not implemented yet. It can serve generation ' +
-          '(AWS-native billing, no separate key) but never the offer scan, which ' +
-          'needs live web search.',
-      );
-  }
-}
-
 /**
- * Defer construction until the first call.
+ * Build a provider from one user's own key (E7.6).
  *
- * `build` throws on a missing key or an unknown provider id, which is the right
- * behaviour — but not at container start: /health is the first thing you check
- * when a stage looks wrong, and it has to answer even when the AI configuration
- * is what's wrong. This way a bad key fails the routes that generate, and
- * nothing else.
+ * Per request, not per container. The container-level `lazyProvider` existed to
+ * avoid rebuilding one shared client on every call; with a key per user there is
+ * nothing shared to cache, and caching per user would mean holding other people's
+ * credentials in memory across requests for no gain.
+ *
+ * The model is the deployment's choice (`AI_MODEL`, or the provider's default);
+ * the provider itself is the user's, because they know which key they pasted.
  */
-export function lazyProvider(build: () => AiProvider): AiProvider {
-  let cached: AiProvider | undefined;
-  const resolve = (): AiProvider => (cached ??= build());
-  return {
-    get name() {
-      return resolve().name;
-    },
-    get model() {
-      return resolve().model;
-    },
-    generateDay: (config) => resolve().generateDay(config),
-    scanOffers: (request) => resolve().scanOffers(request),
-  };
-}
-
-/** The provider used to generate plans. */
-export function generationProvider(env: ProviderEnv): AiProvider {
-  const id = parseProviderId(env.AI_PROVIDER, 'anthropic');
-  return build(id, env.AI_MODEL?.trim() || defaultModelFor(id), env);
-}
-
-/**
- * The provider used to scan offers — `AI_PROVIDER_OFFERS` if set, otherwise the
- * generation provider. Rejected up front if it cannot search the web, so the
- * failure is a clear configuration error rather than an offer list that looks
- * convincingly empty.
- */
-export function offerProvider(env: ProviderEnv): AiProvider {
-  const generationId = parseProviderId(env.AI_PROVIDER, 'anthropic');
-  const id = parseProviderId(env.AI_PROVIDER_OFFERS, generationId);
-  if (!canScanOffers(id)) throw new OfferScanUnsupportedError(id);
-  // The model override belongs to the generation provider; a different offer
-  // provider takes its own default rather than a model id it may not have.
-  const model =
-    id === generationId ? env.AI_MODEL?.trim() || defaultModelFor(id) : defaultModelFor(id);
-  return build(id, model, env);
+export function providerForKey(
+  provider: ProviderId,
+  key: string,
+  env: Pick<ProviderEnv, 'AI_MODEL'> = {},
+): AiProvider {
+  const model = env.AI_MODEL?.trim() || defaultModelFor(provider);
+  switch (provider) {
+    case 'anthropic':
+      return AnthropicProvider.fromApiKey(key, model);
+    case 'openai':
+      return OpenAiProvider.fromApiKey(key, model);
+    case 'bedrock':
+      // Bedrock authenticates with the caller's AWS role, not an API key, so
+      // "bring your own key" has nothing to bring. It was never implemented.
+      throw new Error('Bedrock cannot be used with a user-supplied API key.');
+  }
 }

@@ -130,6 +130,32 @@ export const offerScanSchema = z.object({
 });
 export type OfferScan = z.infer<typeof offerScanSchema>;
 
+/**
+ * The user's own AI provider key (E7.6).
+ *
+ * Users bring their own key so nobody funds anyone else's generation. Vire is
+ * therefore the custodian of a billable third-party credential, which is why the
+ * value is write-only everywhere: no endpoint returns it, it is excluded from the
+ * export, and it never reaches a log. `aiKeyStatusSchema` is what the client is
+ * allowed to know about it.
+ */
+export const aiProviderSchema = z.enum(['anthropic', 'openai']);
+export type AiProviderId = z.infer<typeof aiProviderSchema>;
+
+export const aiKeySchema = z.object({
+  provider: aiProviderSchema,
+  // Length bounds only. Whether the key actually works is something only the
+  // provider can say, and it says so on the first generation.
+  key: z.string().min(20).max(200),
+});
+export type AiKey = z.infer<typeof aiKeySchema>;
+
+/** Everything the client may learn about a stored key. Never the key itself. */
+export interface AiKeyStatus {
+  set: boolean;
+  provider: AiProviderId | null;
+}
+
 /* ───────────────────────────── profile ───────────────────────────── */
 
 export const sexSchema = z.enum(['f', 'm']);

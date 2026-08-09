@@ -1,7 +1,9 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryVireApi } from '@/api/memory-api';
+import { createQueryClient } from '@/data/query';
 import { ApiError, type ProfileInput, type VireApi } from '@/api/types';
 import { KCAL_FLOOR } from '@/content/plan';
 import { t } from '@/content/strings';
@@ -44,14 +46,19 @@ function setup(
   const onSignOut = vi.fn();
   const profile = options.profile ?? null;
 
+  // The AI key section reads its status through the query layer (E7.6), so the
+  // view needs a client — one per test, so no case sees another's cache.
+  const client = createQueryClient();
   render(
-    <SettingsView
-      api={api}
-      profile={profile}
-      onSaved={onSaved}
-      onSignOut={onSignOut}
-      {...(options.onClose ? { onClose: options.onClose } : {})}
-    />,
+    <QueryClientProvider client={client}>
+      <SettingsView
+        api={api}
+        profile={profile}
+        onSaved={onSaved}
+        onSignOut={onSignOut}
+        {...(options.onClose ? { onClose: options.onClose } : {})}
+      />
+    </QueryClientProvider>,
   );
   return { api, onSaved, onSignOut, user: userEvent.setup() };
 }
@@ -126,7 +133,7 @@ describe('settings mode', () => {
     // keyboard user tabbed into a screen they could not see.
     const user = userEvent.setup();
     render(
-      <>
+      <QueryClientProvider client={createQueryClient()}>
         <button type="button">behind the dialog</button>
         <SettingsView
           api={new MemoryVireApi()}
@@ -135,7 +142,7 @@ describe('settings mode', () => {
           onClose={vi.fn()}
           onSignOut={vi.fn()}
         />
-      </>,
+      </QueryClientProvider>,
     );
 
     const outside = screen.getByRole('button', { name: 'behind the dialog' });
@@ -151,13 +158,15 @@ describe('settings mode', () => {
 
   it('locks background scroll while open, and restores it after', () => {
     const { unmount } = render(
-      <SettingsView
-        api={new MemoryVireApi()}
-        profile={savedProfile}
-        onSaved={vi.fn()}
-        onClose={vi.fn()}
-        onSignOut={vi.fn()}
-      />,
+      <QueryClientProvider client={createQueryClient()}>
+        <SettingsView
+          api={new MemoryVireApi()}
+          profile={savedProfile}
+          onSaved={vi.fn()}
+          onClose={vi.fn()}
+          onSignOut={vi.fn()}
+        />
+      </QueryClientProvider>,
     );
     expect(document.body.style.overflow).toBe('hidden');
     unmount();

@@ -62,15 +62,16 @@ function flakyProvider(weekday: number, failures: number): AiProvider {
   } as unknown as AiProvider;
 }
 
-async function setup(options: { provider?: AiProvider; profile?: Profile | null } = {}) {
+async function setup(options: { provider?: AiProvider | null; profile?: Profile | null } = {}) {
   const store = new ValidatingStore(new MemoryStore());
-  const provider = options.provider ?? okProvider();
+  // `null` models a user who has not set an AI key (E7.6).
+  const provider = options.provider === null ? null : (options.provider ?? okProvider());
   const profile = options.profile === undefined ? PROFILE : options.profile;
 
   const app = planRoutes({
     store,
     verifier,
-    provider,
+    providerFor: async () => provider,
     now: () => new Date('2026-08-08T10:00:00Z'),
     // No backoff in tests; the delay itself is not what the retry tests assert.
     retryDelayMs: 0,
@@ -90,7 +91,7 @@ async function setup(options: { provider?: AiProvider; profile?: Profile | null 
       headers: { authorization: `Bearer ${token}` },
     });
 
-  return { app, store, provider, generate };
+  return { app, store, provider: provider as AiProvider, generate };
 }
 
 /** Collect the JSON payloads out of an SSE response body. */
@@ -322,5 +323,33 @@ describe('POST /plan/starter', () => {
       checked: {},
       store: {},
     });
+  });
+});
+
+describe('without an AI key (E7.6)', () => {
+  it('refuses to generate, since there is no key to generate with', async () => {
+    const { generate } = await setup({ provider: null });
+    const response = await generate();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'no_ai_key' });
+  });
+
+  it('does not spend the daily allowance', async () => {
+    // Being unable to generate at all must not cost a slice of the allowance.
+    const { generate, store } = await setup({ provider: null });
+    await generate();
+
+    const userId = (await import('../auth/identity')).userIdFromClaims({ sub: ALICE });
+    expect(await store.bumpRateLimit(userId, 'generate', '2026-08-08')).toBe(1);
+  });
+
+  it('still adopts the starter week, which needs no provider', async () => {
+    // The whole point of the no-key state: the app works, just without generation.
+    const { app } = await setup({ provider: null });
+    const response = await app.request('/plan/starter', {
+      method: 'POST',
+      headers: { authorization: `Bearer token-${ALICE}` },
+    });
+    expect(response.status).toBe(200);
   });
 });

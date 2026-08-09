@@ -48,11 +48,12 @@ function fakeProvider(deals: Deal[], note = 'From the chains’ offer pages.'): 
 }
 
 async function setup(
-  options: { provider?: AiProvider; profile?: Profile | null; withPlan?: boolean } = {},
+  options: { provider?: AiProvider | null; profile?: Profile | null; withPlan?: boolean } = {},
 ) {
   const store = new ValidatingStore(new MemoryStore());
-  const provider = options.provider ?? fakeProvider([]);
-  const app = offerRoutes({ store, verifier, provider, now: () => NOW });
+  // `null` models a user who has not set an AI key (E7.6).
+  const provider = options.provider === null ? null : (options.provider ?? fakeProvider([]));
+  const app = offerRoutes({ store, verifier, providerFor: async () => provider, now: () => NOW });
   const alice = userIdFromClaims({ sub: ALICE });
 
   const profile = options.profile === undefined ? PROFILE : options.profile;
@@ -71,7 +72,7 @@ async function setup(
   const get = (sub = ALICE, id = planId) =>
     app.request(`/offers/${id}`, { headers: { authorization: `Bearer token-${sub}` } });
 
-  return { app, store, provider, plan, planId, scan, get };
+  return { app, store, provider: provider as AiProvider, plan, planId, scan, get };
 }
 
 describe('clampDeals', () => {
@@ -220,5 +221,21 @@ describe('authorization', () => {
   it('refuses a plan id that could not be one', async () => {
     const { get } = await setup();
     expect((await get(ALICE, 'plan id')).status).toBe(400);
+  });
+});
+
+describe('without an AI key (E7.6)', () => {
+  it('refuses to scan', async () => {
+    const { scan } = await setup({ provider: null });
+    const response = await scan();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'no_ai_key' });
+  });
+
+  it('does not spend the daily allowance', async () => {
+    const { scan, store } = await setup({ provider: null });
+    await scan();
+    const alice = userIdFromClaims({ sub: ALICE });
+    expect(await store.bumpRateLimit(alice, 'offers', '2026-08-08')).toBe(1);
   });
 });

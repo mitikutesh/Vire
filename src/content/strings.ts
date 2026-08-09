@@ -174,6 +174,26 @@ export const t = {
     deletePartial:
       'Your data has been deleted, but closing the account didn’t finish. Tap again to complete it.',
 
+    // E7.6: the user brings their own provider key, so nobody funds anyone
+    // else's generation.
+    aiKeySection: 'AI key',
+    aiKeyBlurb:
+      'Vire generates your week with your own Anthropic or OpenAI key, so the cost is yours and nobody else’s. Without one, the built-in Finnish starter plan still works — you just can’t generate a new week or scan for offers.',
+    aiKeyProvider: 'Provider',
+    aiKeyAnthropic: 'Anthropic (Claude)',
+    aiKeyOpenai: 'OpenAI',
+    aiKeyLabel: 'API key',
+    aiKeyPlaceholder: 'sk-…',
+    aiKeySave: 'Save key',
+    aiKeyReplace: 'Replace key',
+    aiKeyClear: 'Remove key',
+    aiKeySet: (provider: string) => `A ${provider} key is saved.`,
+    aiKeyUnset: 'No key saved yet.',
+    // Says plainly that it cannot be read back, so nobody hunts for a reveal
+    // button that deliberately does not exist.
+    aiKeyWriteOnly: 'Stored encrypted and never shown again — replace it if you lose it.',
+    aiKeyFailed: 'Couldn’t save that key. Check it and try again.',
+
     signOut: 'Sign out',
 
     // Health guardrail 2 — must survive any rewrite (PLAN §7).
@@ -201,6 +221,13 @@ export const t = {
         allergies ? ` (avoiding ${allergies})` : ''
       }, an exercise schedule and a full grocery list with links to Finnish store prices.`,
     generate: 'Generate my week plan',
+    // No key: generation is not on offer, and the copy says why rather than
+    // presenting a button that can only fail.
+    noKeyTitle: 'Add an AI key to generate a week',
+    noKeyBlurb:
+      'Generating a week uses your own Anthropic or OpenAI key. Add one in Settings, or start with the built-in Finnish starter plan.',
+    noKeyAction: 'Open Settings',
+    errorNoKey: 'That needs an AI key — add one in Settings, or use the starter plan.',
     // Health guardrail 3: the starter plan is NOT allergy-adjusted, and says so
     // at both points it is offered (idle and error).
     starter: (hasAllergies: boolean) =>

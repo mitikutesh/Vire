@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryVireApi } from '@/api/memory-api';
+import { TEST_AI_KEY } from '@/api/test-ai-key';
 import { ApiError, PlanGenerationError, type VireApi } from '@/api/types';
 import { t } from '@/content/strings';
 import type { Profile } from '@/domain/schema';
@@ -25,13 +26,30 @@ const PROFILE: Profile = {
 
 /** The in-memory API with methods replaced, so a growing port breaks no stub. */
 const apiWith = (overrides: Partial<VireApi>): VireApi =>
-  Object.assign(new MemoryVireApi(PROFILE), overrides);
+  Object.assign(new MemoryVireApi(PROFILE, { aiKey: TEST_AI_KEY }), overrides);
 
-function setup(options: { api?: VireApi; profile?: Profile } = {}) {
+function setup(options: { api?: VireApi; profile?: Profile; hasAiKey?: boolean } = {}) {
   const onPlan = vi.fn();
-  const api = options.api ?? new MemoryVireApi(options.profile ?? PROFILE);
-  render(<PlanGate api={api} profile={options.profile ?? PROFILE} onPlan={onPlan} />);
-  return { onPlan, api, user: userEvent.setup() };
+  const onOpenSettings = vi.fn();
+  const api =
+    options.api ??
+    new MemoryVireApi(options.profile ?? PROFILE, {
+      // Matches the `hasAiKey` prop below: a harness that claims a key while the
+      // fake has none would fail for a reason the test is not about.
+      ...(options.hasAiKey === false ? {} : { aiKey: TEST_AI_KEY }),
+    });
+  render(
+    <PlanGate
+      api={api}
+      profile={options.profile ?? PROFILE}
+      onPlan={onPlan}
+      // Most cases are about generating, which needs a key (E7.6); the no-key
+      // state has its own suite at the bottom.
+      hasAiKey={options.hasAiKey ?? true}
+      onOpenSettings={onOpenSettings}
+    />,
+  );
+  return { onPlan, onOpenSettings, api, user: userEvent.setup() };
 }
 
 describe('idle', () => {
@@ -161,7 +179,7 @@ describe('failure', () => {
 
   it('retries from the error screen', async () => {
     let attempts = 0;
-    const memory = new MemoryVireApi(PROFILE);
+    const memory = new MemoryVireApi(PROFILE, { aiKey: TEST_AI_KEY });
     const api = apiWith({
       generatePlan: async (onDay) => {
         attempts += 1;
@@ -201,7 +219,7 @@ describe('starter plan', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const memory = new MemoryVireApi(PROFILE);
+    const memory = new MemoryVireApi(PROFILE, { aiKey: TEST_AI_KEY });
     const api = apiWith({
       adoptStarterPlan: async () => {
         calls += 1;
@@ -218,5 +236,48 @@ describe('starter plan', () => {
 
     release();
     await waitFor(() => expect(onPlan).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('without an AI key (E7.6)', () => {
+  it('does not offer generation at all', async () => {
+    // A button that can only fail is worse than no button.
+    setup({ hasAiKey: false });
+    expect(screen.queryByRole('button', { name: t.planGate.generate })).not.toBeInTheDocument();
+  });
+
+  it('explains why, and points at Settings', async () => {
+    const { user, onOpenSettings } = setup({ hasAiKey: false });
+    expect(screen.getByText(t.planGate.noKeyTitle)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: t.planGate.noKeyAction }));
+    expect(onOpenSettings).toHaveBeenCalled();
+  });
+
+  it('still offers the starter plan, which needs no key', async () => {
+    // The whole point of the no-key state: the app works, just without generation.
+    const { user, onPlan } = setup({ hasAiKey: false });
+    await user.click(screen.getByRole('button', { name: t.planGate.starter(false) }));
+    await waitFor(() => expect(onPlan).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('before the key status is known', () => {
+  it('offers neither branch, rather than flashing the wrong one', () => {
+    // Guessing shows the user something that flips under them; "add a key" shown
+    // to someone who has one is the worse guess.
+    render(
+      <PlanGate
+        api={new MemoryVireApi(PROFILE)}
+        profile={PROFILE}
+        onPlan={vi.fn()}
+        hasAiKey={undefined}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: t.planGate.generate })).not.toBeInTheDocument();
+    expect(screen.queryByText(t.planGate.noKeyTitle)).not.toBeInTheDocument();
+    // The starter plan needs no key, so it is offered either way.
+    expect(screen.getByRole('button', { name: t.planGate.starter(false) })).toBeInTheDocument();
   });
 });

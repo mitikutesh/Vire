@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DatedWeight, VireApi } from '@/api/types';
+import type { AiProviderId } from '@/domain/schema';
 import { emptyLog } from '@/domain/log';
 import { emptyGrocState } from '@/domain/groc-state';
 import type { DailyLog, GrocState, Profile, StoredPlan } from '@/domain/schema';
@@ -217,6 +218,40 @@ export function useWeighIn(api: VireApi) {
 export function useProfileWriter() {
   const queryClient = useQueryClient();
   return (profile: Profile) => queryClient.setQueryData(queryKeys.profile, profile);
+}
+
+/**
+ * Whether the user has set their own AI key (E7.6).
+ *
+ * Only the status is ever cached, because only the status is ever returned. The
+ * plan gate reads this to decide whether generation is even on offer.
+ */
+export function useAiKey(api: VireApi, enabled: boolean) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: queryKeys.aiKey,
+    queryFn: () => api.getAiKeyStatus(),
+    enabled,
+  });
+
+  const save = useMutation({
+    mutationFn: ({ provider, key }: { provider: AiProviderId; key: string }) =>
+      api.setAiKey(provider, key),
+    onSuccess: (status) => queryClient.setQueryData(queryKeys.aiKey, status),
+    onError: (error) => {
+      // The error, never the variables: `mutate`'s input carries the key, and a
+      // logged mutation context is a logged credential.
+      console.error('[vire] Saving the AI key failed', error);
+    },
+  });
+
+  const clear = useMutation({
+    mutationFn: () => api.clearAiKey(),
+    onSuccess: (status) => queryClient.setQueryData(queryKeys.aiKey, status),
+  });
+
+  return { status: query.data ?? null, loaded: !query.isPending, save, clear };
 }
 
 /**

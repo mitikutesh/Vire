@@ -1,5 +1,11 @@
-import { dailyLogSchema, planSchema, profileSchema, weightEntrySchema } from '@/domain/schema';
-import type { DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
+import {
+  aiKeySchema,
+  dailyLogSchema,
+  planSchema,
+  profileSchema,
+  weightEntrySchema,
+} from '@/domain/schema';
+import type { AiKey, AiKeyStatus, DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
 import { assertDateKey, type UserId } from './keys';
 import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore } from './store';
 
@@ -28,6 +34,22 @@ export class ValidatingStore implements VireStore {
 
   async putProfile(userId: UserId, profile: Profile): Promise<void> {
     return this.inner.putProfile(userId, profileSchema.parse(profile));
+  }
+
+  async getAiKey(userId: UserId): Promise<AiKey | null> {
+    return this.inner.getAiKey(userId);
+  }
+
+  async putAiKey(userId: UserId, entry: AiKey): Promise<void> {
+    return this.inner.putAiKey(userId, aiKeySchema.parse(entry));
+  }
+
+  async deleteAiKey(userId: UserId): Promise<void> {
+    return this.inner.deleteAiKey(userId);
+  }
+
+  async getAiKeyStatus(userId: UserId): Promise<AiKeyStatus> {
+    return this.inner.getAiKeyStatus(userId);
   }
 
   async getActivePlan(userId: UserId): Promise<StoredPlan | null> {

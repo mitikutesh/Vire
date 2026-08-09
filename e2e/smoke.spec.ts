@@ -31,9 +31,12 @@ test('the built app boots, onboards, and renders the four-tab shell', async ({ p
   await expect(page.getByText(/Mifflin-St Jeor/)).toBeVisible(); // guardrail 2
   await page.getByRole('button', { name: 'Save and continue' }).click();
 
-  // Second gate: every tab renders a week, so one has to exist first. The
-  // starter path is taken here because it needs no provider and no key.
+  // Second gate: every tab renders a week, so one has to exist first. A brand-new
+  // account has no AI key, so generation is not offered at all (E7.6) — the copy
+  // says why, and the starter week is the path through.
   await expect(page.getByRole('heading', { name: 'No plan for this week yet' })).toBeVisible();
+  await expect(page.getByText('Add an AI key to generate a week')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Generate my week plan' })).toHaveCount(0);
   await page.getByRole('button', { name: /built-in Finnish starter plan/ }).click();
 
   // Now the shell itself: all four destinations, and real plan content. `exact`

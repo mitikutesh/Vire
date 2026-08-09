@@ -9,6 +9,7 @@ import { calcTarget } from '@/domain/target';
 import { Dialog } from '@/ui/Dialog';
 import { NumberField, SelectField, TextField } from '@/ui/Field';
 import { WeighInSection } from '@/weight/WeighInSection';
+import { AiKeySection } from './AiKeySection';
 import { DataSection } from './DataSection';
 
 /**
@@ -217,6 +218,10 @@ export function SettingsView({
           <p className="text-sub mt-1 text-xs">{t.settings.onTheWay(form.w, form.goalW)}</p>
         ) : null}
       </section>
+
+      {/* Shown in both modes: a new user can paste a key during first-run setup
+          and generate immediately, and it stays editable in Settings (E7.6). */}
+      <AiKeySection api={api} />
 
       {profile && today ? <WeighInSection api={api} profile={profile} today={today} /> : null}
 

@@ -18,6 +18,7 @@ export const queryKeys = {
   logs: ['logs'] as const,
   groc: (planId: string) => ['groc', planId] as const,
   offers: (planId: string) => ['offers', planId] as const,
+  aiKey: ['ai-key'] as const,
 };
 
 export function createQueryClient(): QueryClient {

@@ -1,6 +1,14 @@
 import type { WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import type { DailyLog, GrocState, OfferScan, Profile, StoredPlan } from '@/domain/schema';
+import type {
+  AiKeyStatus,
+  AiProviderId,
+  DailyLog,
+  GrocState,
+  OfferScan,
+  Profile,
+  StoredPlan,
+} from '@/domain/schema';
 
 /** A day's log with the date it belongs to. */
 export interface DatedLog extends DailyLog {
@@ -98,6 +106,16 @@ export interface VireApi {
    * the confirmation the user typed is sent for the server to check too.
    */
   deleteAccount(confirm: string): Promise<void>;
+
+  /**
+   * Whether the user has set their own AI key, and for which provider (E7.6).
+   *
+   * There is deliberately no way to read the key back. It is a billable
+   * credential, so the client may learn that one exists and nothing more.
+   */
+  getAiKeyStatus(): Promise<AiKeyStatus>;
+  setAiKey(provider: AiProviderId, key: string): Promise<AiKeyStatus>;
+  clearAiKey(): Promise<AiKeyStatus>;
 
   /** The recent days, newest first, for the adherence summary (I3). */
   listLogs(): Promise<DatedLog[]>;

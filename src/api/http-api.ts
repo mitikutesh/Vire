@@ -1,7 +1,15 @@
 import type { WeekdayIndex } from '@/domain/constants';
 import { dataOf, parsePlanEvent, takeFrames } from '@/domain/plan-stream';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import type { DailyLog, GrocState, OfferScan, Profile, StoredPlan } from '@/domain/schema';
+import type {
+  AiKeyStatus,
+  AiProviderId,
+  DailyLog,
+  GrocState,
+  OfferScan,
+  Profile,
+  StoredPlan,
+} from '@/domain/schema';
 import {
   ApiError,
   PlanGenerationError,
@@ -154,6 +162,27 @@ export class HttpVireApi implements VireApi {
       body: JSON.stringify({ confirm }),
     });
     if (!response.ok) return HttpVireApi.fail(response);
+  }
+
+  async getAiKeyStatus(): Promise<AiKeyStatus> {
+    const response = await this.request('/ai-key');
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as AiKeyStatus;
+  }
+
+  async setAiKey(provider: AiProviderId, key: string): Promise<AiKeyStatus> {
+    const response = await this.request('/ai-key', {
+      method: 'PUT',
+      body: JSON.stringify({ provider, key }),
+    });
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as AiKeyStatus;
+  }
+
+  async clearAiKey(): Promise<AiKeyStatus> {
+    const response = await this.request('/ai-key', { method: 'DELETE' });
+    if (!response.ok) return HttpVireApi.fail(response);
+    return (await response.json()) as AiKeyStatus;
   }
 
   async listLogs(): Promise<DatedLog[]> {

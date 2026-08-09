@@ -15,8 +15,6 @@ declare module 'sst' {
   export interface Resource {
     /** Comma- or whitespace-separated e-mails permitted to register. */
     SignupAllowlist: { type: 'sst.sst.Secret'; value: string };
-    AnthropicApiKey: { type: 'sst.sst.Secret'; value: string };
-    OpenaiApiKey: { type: 'sst.sst.Secret'; value: string };
     Data: { type: 'sst.aws.Dynamo'; name: string };
     Api: { type: 'sst.aws.Function'; url: string };
     Users: { type: 'sst.aws.CognitoUserPool'; id: string };

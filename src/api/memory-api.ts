@@ -1,7 +1,22 @@
 import { WEEKDAYS, type WeekdayIndex } from '@/domain/constants';
 import type { ReportedDayState } from '@/domain/plan-stream';
-import { dailyLogSchema, grocStateSchema, profileSchema, weightEntrySchema } from '@/domain/schema';
-import type { DailyLog, GrocState, OfferScan, Profile, StoredPlan } from '@/domain/schema';
+import {
+  aiKeySchema,
+  dailyLogSchema,
+  grocStateSchema,
+  profileSchema,
+  weightEntrySchema,
+} from '@/domain/schema';
+import type {
+  AiKey,
+  AiKeyStatus,
+  AiProviderId,
+  DailyLog,
+  GrocState,
+  OfferScan,
+  Profile,
+  StoredPlan,
+} from '@/domain/schema';
 import { emptyGrocState } from '@/domain/groc-state';
 import { calcTarget } from '@/domain/target';
 import { starterPlan } from '@/content/starter-plan';
@@ -28,6 +43,11 @@ import {
 export interface MemoryApiOptions {
   /** Days to fail, so the plan gate's error path can be driven in a test. */
   failDays?: readonly WeekdayIndex[];
+  /**
+   * A key to start with (E7.6). Defaults to none, because "no key yet" is what a
+   * new account looks like — a test that needs generation opts in.
+   */
+  aiKey?: AiKey | null;
 }
 
 export class MemoryVireApi implements VireApi {
@@ -37,12 +57,14 @@ export class MemoryVireApi implements VireApi {
   private readonly weights = new Map<string, number>();
   private readonly grocStates = new Map<string, GrocState>();
   private readonly offers = new Map<string, OfferScan>();
+  private aiKey: AiKey | null;
   private planCount = 0;
   private readonly failDays: readonly WeekdayIndex[];
 
   constructor(profile: Profile | null = null, options: MemoryApiOptions = {}) {
     this.profile = profile;
     this.failDays = options.failDays ?? [];
+    this.aiKey = options.aiKey ?? null;
   }
 
   async getProfile(): Promise<Profile | null> {
@@ -77,6 +99,8 @@ export class MemoryVireApi implements VireApi {
     onDay: (day: WeekdayIndex, state: ReportedDayState) => void,
   ): Promise<StoredPlan> {
     if (!this.profile) throw new ApiError(409, 'no_profile');
+    // Same rule as the route: without a key there is nothing to generate with.
+    if (!this.aiKey) throw new ApiError(409, 'no_ai_key');
 
     for (const day of WEEKDAYS) onDay(day, 'run');
     // A microtask gap, so a caller that renders between events actually gets a
@@ -164,6 +188,22 @@ export class MemoryVireApi implements VireApi {
     this.weights.clear();
     this.grocStates.clear();
     this.offers.clear();
+  }
+
+  async getAiKeyStatus(): Promise<AiKeyStatus> {
+    return { set: this.aiKey !== null, provider: this.aiKey?.provider ?? null };
+  }
+
+  async setAiKey(provider: AiProviderId, key: string): Promise<AiKeyStatus> {
+    const parsed = aiKeySchema.safeParse({ provider, key: key.trim() });
+    if (!parsed.success) throw new ApiError(422, 'invalid_ai_key');
+    this.aiKey = parsed.data;
+    return this.getAiKeyStatus();
+  }
+
+  async clearAiKey(): Promise<AiKeyStatus> {
+    this.aiKey = null;
+    return this.getAiKeyStatus();
   }
 
   async listLogs(): Promise<DatedLog[]> {

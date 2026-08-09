@@ -11,8 +11,8 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { OFFER_TTL_MS } from '@/domain/offers';
-import type { DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
-import { SK, SK_PREFIX, assertDateKey, pk, type UserId } from './keys';
+import type { AiKey, AiKeyStatus, DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
+import { SK, SK_PREFIX, UNEXPORTABLE_SK, assertDateKey, pk, type UserId } from './keys';
 import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore } from './store';
 
 /** Cached offer scans expire on their own; nothing has to sweep them. */
@@ -206,7 +206,25 @@ export class DynamoStore implements VireStore {
     return Number(Attributes?.['count'] ?? 1);
   }
 
-  async exportAll(userId: UserId): Promise<Record<string, unknown>[]> {
+  async getAiKey(userId: UserId): Promise<AiKey | null> {
+    return this.get<AiKey>(userId, SK.aiKey);
+  }
+
+  async putAiKey(userId: UserId, entry: AiKey): Promise<void> {
+    await this.put(userId, SK.aiKey, entry);
+  }
+
+  async deleteAiKey(userId: UserId): Promise<void> {
+    await this.deleteItem(userId, SK.aiKey);
+  }
+
+  async getAiKeyStatus(userId: UserId): Promise<AiKeyStatus> {
+    const entry = await this.getAiKey(userId);
+    return { set: entry !== null, provider: entry?.provider ?? null };
+  }
+
+  /** Every item in the partition, unfiltered. Internal — see the two callers. */
+  private async allItems(userId: UserId): Promise<Record<string, unknown>[]> {
     const items: Record<string, unknown>[] = [];
     let startKey: Record<string, unknown> | undefined;
 
@@ -226,9 +244,18 @@ export class DynamoStore implements VireStore {
     return items;
   }
 
+  async exportAll(userId: UserId): Promise<Record<string, unknown>[]> {
+    // Filtered; `deleteAll` deliberately is not. Deriving deletion from the export
+    // would mean anything withheld from the export also survived account deletion —
+    // which for a billable credential is the worse of the two failures.
+    return (await this.allItems(userId)).filter(
+      (item) => !UNEXPORTABLE_SK.includes(String(item['sk'])),
+    );
+  }
+
   /** GDPR deletion: every item in the partition, in batches (I6). */
   async deleteAll(userId: UserId): Promise<void> {
-    const items = await this.exportAll(userId);
+    const items = await this.allItems(userId);
     const partition = pk(userId);
 
     for (let i = 0; i < items.length; i += BATCH_DELETE_SIZE) {

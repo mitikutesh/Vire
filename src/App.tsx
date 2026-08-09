@@ -9,6 +9,7 @@ import type { AuthClient } from '@/auth/types';
 import { createQueryClient } from '@/data/query';
 import {
   useDailyLog,
+  useAiKey,
   useGrocState,
   useLogs,
   useOffers,
@@ -128,6 +129,9 @@ function SignedInApp({
   const logsQuery = useLogs(api, profile !== null);
   const logs = logsQuery.data ?? [];
 
+  // Read before the gate: whether generation is even on offer depends on it (E7.6).
+  const aiKey = useAiKey(api, profile !== null);
+
   const now = useClock();
   // The client's own date. Midnight passing changes the key, and the new day's
   // log loads on its own.
@@ -152,17 +156,53 @@ function SignedInApp({
     return <SettingsView api={api} profile={null} onSaved={setProfile} onSignOut={onSignOut} />;
   }
 
+  /**
+   * Settings, as an overlay available from both the plan gate and the shell.
+   *
+   * The gate needs it because a user with no AI key is sent there to add one, and
+   * a button that opens nothing is worse than no button. `onRegenerate` is only
+   * offered when a plan exists to replace.
+   */
+  const settingsOverlay = settingsOpen ? (
+    <SettingsView
+      api={api}
+      profile={profile}
+      onSaved={(saved) => {
+        setProfile(saved);
+        setSettingsOpen(false);
+      }}
+      onClose={() => setSettingsOpen(false)}
+      today={now}
+      {...(plan && !replacingPlan
+        ? {
+            onRegenerate: () => {
+              setSettingsOpen(false);
+              setReplacingPlan(true);
+            },
+          }
+        : {})}
+      onSignOut={onSignOut}
+    />
+  ) : null;
+
   if (!plan || replacingPlan) {
     return (
-      <PlanGate
-        api={api}
-        profile={profile}
-        onPlan={(week) => {
-          setPlan(week);
-          setReplacingPlan(false);
-        }}
-        {...(plan ? { onKeepCurrent: () => setReplacingPlan(false) } : {})}
-      />
+      <>
+        <PlanGate
+          api={api}
+          profile={profile}
+          onPlan={(week) => {
+            setPlan(week);
+            setReplacingPlan(false);
+          }}
+          // undefined until the status lands, so the gate shows neither branch
+          // rather than flashing the wrong one.
+          hasAiKey={aiKey.loaded ? (aiKey.status?.set ?? false) : undefined}
+          onOpenSettings={() => setSettingsOpen(true)}
+          {...(plan ? { onKeepCurrent: () => setReplacingPlan(false) } : {})}
+        />
+        {settingsOverlay}
+      </>
     );
   }
 
@@ -180,23 +220,7 @@ function SignedInApp({
         savingCity={saveCity.isPending}
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      {settingsOpen ? (
-        <SettingsView
-          api={api}
-          profile={profile}
-          onSaved={(saved) => {
-            setProfile(saved);
-            setSettingsOpen(false);
-          }}
-          onClose={() => setSettingsOpen(false)}
-          today={now}
-          onRegenerate={() => {
-            setSettingsOpen(false);
-            setReplacingPlan(true);
-          }}
-          onSignOut={onSignOut}
-        />
-      ) : null}
+      {settingsOverlay}
     </>
   );
 }

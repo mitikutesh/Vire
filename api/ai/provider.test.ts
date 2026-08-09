@@ -4,14 +4,7 @@ import { STARTER_GROC } from '@/content/starter-plan';
 import { aggregateItems } from '@/domain/aggregate-items';
 import { AnthropicProvider } from './anthropic-provider';
 import { OpenAiProvider } from './openai-provider';
-import {
-  canScanOffers,
-  defaultModelFor,
-  generationProvider,
-  lazyProvider,
-  offerProvider,
-  parseProviderId,
-} from './provider';
+import { canScanOffers, defaultModelFor, parseProviderId, providerForKey } from './provider';
 import { allergyRule, dayGenerationPrompt, offerScanPrompt, slotBudgets } from './prompts';
 import {
   DAY_JSON,
@@ -23,7 +16,7 @@ import {
   OFFER_JSON_BAD_STORE,
   VALID_DAY,
 } from './fixtures';
-import { AiOutputError, OfferScanUnsupportedError, type AiProvider, type DayConfig } from './types';
+import { AiOutputError, type AiProvider, type DayConfig } from './types';
 
 const config: DayConfig = { weekday: 0, target: 1600, sex: 'f', age: 35, allergies: '' };
 const offerRequest = {
@@ -191,76 +184,29 @@ describe('provider selection', () => {
     expect(() => parseProviderId('gemini', 'anthropic')).toThrow(/Unknown AI_PROVIDER/);
   });
 
-  it('builds the configured generation provider', () => {
-    const provider = generationProvider({
-      AI_PROVIDER: 'openai',
-      AI_MODEL: 'gpt-4.1-mini',
-      OPENAI_API_KEY: 'sk-test',
-    });
-    expect(provider.name).toBe('openai');
-    expect(provider.model).toBe('gpt-4.1-mini');
-  });
-
-  it('fails at startup when the key for the chosen provider is missing', () => {
-    expect(() => generationProvider({ AI_PROVIDER: 'openai' })).toThrow(/OPENAI_API_KEY/);
-    expect(() => generationProvider({ AI_PROVIDER: 'anthropic' })).toThrow(/ANTHROPIC_API_KEY/);
-  });
-
-  it('lets the offer scan run on a different provider than generation', () => {
-    // The mixed configuration that makes Bedrock usable for generation.
-    const provider = offerProvider({
-      AI_PROVIDER: 'anthropic',
-      AI_PROVIDER_OFFERS: 'openai',
-      ANTHROPIC_API_KEY: 'sk-a',
-      OPENAI_API_KEY: 'sk-o',
-    });
-    expect(provider.name).toBe('openai');
-  });
-
-  it('defaults the offer scan to the generation provider', () => {
-    const provider = offerProvider({ AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'sk-a' });
-    expect(provider.name).toBe('anthropic');
-  });
-
   it('knows which providers can search the web', () => {
     expect(canScanOffers('anthropic')).toBe(true);
     expect(canScanOffers('openai')).toBe(true);
     // Bedrock has no web-search tool — the documented limitation.
     expect(canScanOffers('bedrock')).toBe(false);
   });
-
-  it('refuses to scan offers on a provider that cannot search', () => {
-    // An empty deal list would look exactly like "no offers this week", so this
-    // has to be a loud configuration error instead.
-    expect(() => offerProvider({ AI_PROVIDER: 'bedrock', AI_PROVIDER_OFFERS: 'bedrock' })).toThrow(
-      OfferScanUnsupportedError,
-    );
-  });
-
-  it('reports Bedrock as unimplemented rather than failing in production', () => {
-    expect(() => generationProvider({ AI_PROVIDER: 'bedrock' })).toThrow(/not implemented yet/);
-  });
 });
 
-describe('lazyProvider', () => {
-  it('does not build the provider until something needs it', () => {
-    // A missing key must not take the whole API down at container start: /health
-    // is how you find out the AI configuration is the broken part.
-    const build = vi.fn(() => generationProvider({ AI_PROVIDER: 'anthropic' }));
-    const provider = lazyProvider(build);
-    expect(build).not.toHaveBeenCalled();
-    expect(() => provider.name).toThrow(/ANTHROPIC_API_KEY/);
-  });
-
-  it('builds once and reuses it', () => {
-    const build = vi.fn(() =>
-      generationProvider({ AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'sk-a' }),
-    );
-    const provider = lazyProvider(build);
+describe('providerForKey (E7.6)', () => {
+  it('builds a client from the user’s own key', () => {
+    const provider = providerForKey('anthropic', 'sk-ant-'.padEnd(40, 'x'));
     expect(provider.name).toBe('anthropic');
     expect(provider.model).toBe(defaultModelFor('anthropic'));
-    // The Anthropic client holds a connection pool; rebuilding it per call would
-    // throw that away on every request.
-    expect(build).toHaveBeenCalledTimes(1);
+  });
+
+  it('honours the deployment’s model override', () => {
+    // The model stays the deployment's choice; only the vendor follows the key.
+    const provider = providerForKey('openai', 'sk-'.padEnd(40, 'x'), { AI_MODEL: 'gpt-test-1' });
+    expect(provider.model).toBe('gpt-test-1');
+  });
+
+  it('refuses Bedrock, which has no key to bring', () => {
+    // It authenticates by AWS role, so "bring your own key" is meaningless there.
+    expect(() => providerForKey('bedrock', 'anything')).toThrow(/user-supplied API key/);
   });
 });

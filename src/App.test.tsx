@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryVireApi } from '@/api/memory-api';
+import { TEST_AI_KEY } from '@/api/test-ai-key';
 import { ApiError } from '@/api/types';
 import { FakeAuthClient } from '@/auth/fake-client';
 import { t } from '@/content/strings';
@@ -33,7 +34,9 @@ const PROFILE: Profile = {
  * injected, so the fake cannot drift from the flow it stands in for.
  */
 async function readyApi(profile: Profile = PROFILE) {
-  const api = new MemoryVireApi(profile);
+  // Generation needs the user's own key (E7.6); the shell tests are not about the
+  // no-key state, which has its own suite in src/plan.
+  const api = new MemoryVireApi(profile, { aiKey: TEST_AI_KEY });
   await api.adoptStarterPlan();
   return api;
 }
@@ -114,14 +117,15 @@ describe('plan gate', () => {
 
   it('enters the app once a plan exists', async () => {
     const user = userEvent.setup();
-    render(
-      <App auth={new FakeAuthClient({ signedInAs: OWNER })} api={new MemoryVireApi(PROFILE)} />,
-    );
+    // Generation needs the user's own key (E7.6).
+    const api = new MemoryVireApi(PROFILE, { aiKey: TEST_AI_KEY });
+    render(<App auth={new FakeAuthClient({ signedInAs: OWNER })} api={api} />);
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: t.planGate.title })).toBeInTheDocument(),
     );
 
-    await user.click(screen.getByRole('button', { name: t.planGate.generate }));
+    // Awaited: the generate button appears only once the key status has loaded.
+    await user.click(await screen.findByRole('button', { name: t.planGate.generate }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Now' })).toBeInTheDocument());
   });
 

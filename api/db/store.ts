@@ -1,4 +1,6 @@
 import type {
+  AiKey,
+  AiKeyStatus,
   DailyLog,
   GrocState,
   OfferScan,
@@ -77,7 +79,23 @@ export interface VireStore {
    */
   bumpRateLimit(userId: UserId, action: string, day: string): Promise<number>;
 
-  /** Everything under the user's partition — powers export and deletion (I6). */
+  /**
+   * The user's own AI provider key (E7.6).
+   *
+   * `getAiKey` is for the server's own use when building a provider — never for a
+   * response. Anything the client is allowed to see comes from `getAiKeyStatus`.
+   */
+  getAiKey(userId: UserId): Promise<AiKey | null>;
+  putAiKey(userId: UserId, entry: AiKey): Promise<void>;
+  deleteAiKey(userId: UserId): Promise<void>;
+  getAiKeyStatus(userId: UserId): Promise<AiKeyStatus>;
+
+  /**
+   * Everything under the user's partition — powers export and deletion (I6).
+   *
+   * Excludes anything in `UNEXPORTABLE_SK`: the AI key is a billable credential,
+   * and an export that carried it would be a way to exfiltrate one.
+   */
   exportAll(userId: UserId): Promise<Record<string, unknown>[]>;
   deleteAll(userId: UserId): Promise<void>;
 }

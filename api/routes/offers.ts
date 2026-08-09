@@ -6,7 +6,8 @@ import type { Deal, OfferScan } from '@/domain/schema';
 import { UnauthorizedError, userIdFromClaims } from '../auth/identity';
 import { bearerToken, type TokenVerifier } from '../auth/verifier';
 import type { VireStore } from '../db/store';
-import { OfferScanUnsupportedError, type AiProvider } from '../ai/types';
+import type { ProviderForUser } from '../ai/for-user';
+import { OfferScanUnsupportedError } from '../ai/types';
 
 /**
  * The offer scan (E4.3, shim #6).
@@ -37,8 +38,8 @@ const PLAN_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 export interface OfferRouteDeps {
   store: VireStore;
   verifier: TokenVerifier;
-  /** The offer provider, which must have live web search (PLAN §3a). */
-  provider: AiProvider;
+  /** Resolves the caller's own provider (E7.6). */
+  providerFor: ProviderForUser;
   now?: () => Date;
 }
 
@@ -60,7 +61,12 @@ export function clampDeals(raw: readonly Deal[], validIds: ReadonlySet<string>):
   return kept;
 }
 
-export function offerRoutes({ store, verifier, provider, now = () => new Date() }: OfferRouteDeps) {
+export function offerRoutes({
+  store,
+  verifier,
+  providerFor,
+  now = () => new Date(),
+}: OfferRouteDeps) {
   const app = new Hono();
 
   const requireUser = async (authorization: string | undefined) =>
@@ -97,6 +103,9 @@ export function offerRoutes({ store, verifier, provider, now = () => new Date() 
     // list is what the deals are clamped against.
     if (!profile) return c.json({ error: 'no_profile' }, 409);
     if (!plan || plan.planId !== planId) return c.json({ error: 'no_plan' }, 409);
+
+    const provider = await providerFor(userId);
+    if (!provider) return c.json({ error: 'no_ai_key' }, 409);
 
     const used = await store.bumpRateLimit(userId, 'offers', dayKey(now()));
     if (used > SCAN_LIMIT_PER_DAY) {
