@@ -75,6 +75,7 @@ async function setup(options: { provider?: AiProvider | null; profile?: Profile 
     now: () => new Date('2026-08-08T10:00:00Z'),
     // No backoff in tests; the delay itself is not what the retry tests assert.
     retryDelayMs: 0,
+    rateLimitDelayMs: 0,
   });
 
   if (profile) {
@@ -351,5 +352,77 @@ describe('without an AI key (E7.6)', () => {
       headers: { authorization: `Bearer token-${ALICE}` },
     });
     expect(response.status).toBe(200);
+  });
+});
+
+describe('provider refusals (E7.6 follow-up)', () => {
+  /** An SDK-shaped error: the classifier reads `status`, as both SDKs set it. */
+  const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { status });
+
+  it('gives up immediately on a rejected key, rather than spending the quota', async () => {
+    // A 401 will be a 401 however long we wait; retrying spends the user's own
+    // allowance on a certainty.
+    let calls = 0;
+    const provider: AiProvider = {
+      name: 'fake',
+      model: 'fake-1',
+      generateDay: vi.fn(async () => {
+        calls += 1;
+        throw httpError(401);
+      }),
+      scanOffers: vi.fn(),
+    };
+    const { generate } = await setup({ provider });
+    await sseEvents(await generate());
+
+    // One attempt per day, not three.
+    expect(calls).toBe(7);
+  });
+
+  it('retries a rate limit rather than treating it as bad output', async () => {
+    // 429 on the first attempt, fine on the second.
+    const seen = new Map<number, number>();
+    const provider: AiProvider = {
+      name: 'fake',
+      model: 'fake-1',
+      generateDay: vi.fn(async (config: { weekday: number }) => {
+        const n = (seen.get(config.weekday) ?? 0) + 1;
+        seen.set(config.weekday, n);
+        if (n === 1) throw httpError(429);
+        return VALID_DAY;
+      }),
+      scanOffers: vi.fn(),
+    } as unknown as AiProvider;
+
+    const { generate } = await setup({ provider });
+    const events = await sseEvents(await generate());
+
+    expect(events.filter((e) => e['state'] === 'done')).toHaveLength(7);
+    expect(events.find((e) => e['type'] === 'plan')).toBeDefined();
+  });
+
+  it('does not fire all seven requests at once', async () => {
+    // Seven simultaneous requests is the surest way to trip a personal key's
+    // per-minute allowance.
+    let inFlight = 0;
+    let peak = 0;
+    const provider: AiProvider = {
+      name: 'fake',
+      model: 'fake-1',
+      generateDay: vi.fn(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return VALID_DAY;
+      }),
+      scanOffers: vi.fn(),
+    } as unknown as AiProvider;
+
+    const { generate } = await setup({ provider });
+    await sseEvents(await generate());
+
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(peak).toBeGreaterThan(1); // still concurrent, just bounded
   });
 });

@@ -5,6 +5,8 @@ import { aggregateItems } from '@/domain/aggregate-items';
 import { AnthropicProvider } from './anthropic-provider';
 import { OpenAiProvider } from './openai-provider';
 import { canScanOffers, defaultModelFor, parseProviderId, providerForKey } from './provider';
+import { parseDay } from './parse';
+import { MAX_ITEMS_PER_DAY } from './types';
 import { allergyRule, dayGenerationPrompt, offerScanPrompt, slotBudgets } from './prompts';
 import {
   DAY_JSON,
@@ -208,5 +210,40 @@ describe('providerForKey (E7.6)', () => {
   it('refuses Bedrock, which has no key to bring', () => {
     // It authenticates by AWS role, so "bring your own key" is meaningless there.
     expect(() => providerForKey('bedrock', 'anything')).toThrow(/user-supplied API key/);
+  });
+});
+
+describe('salvaging a day’s grocery rows', () => {
+  const day = (items: unknown) => ({ ...VALID_DAY, items });
+
+  it('drops a malformed row instead of failing the whole day', () => {
+    // Five good meals should not be thrown away because one ingredient row is
+    // short — that failure lands on some days and not others, which is worse to
+    // debug than a consistent one.
+    const raw = day([...VALID_DAY.items, ['too', 'short']]);
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.items).toHaveLength(VALID_DAY.items.length);
+  });
+
+  it('caps an over-long list rather than rejecting it', () => {
+    const many = Array.from({ length: 30 }, (_, i) => [
+      `fi-${i}`,
+      `en-${i}`,
+      'Pantry & cans',
+      '1 kg',
+    ]);
+    const parsed = parseDay(JSON.stringify(day(many)), 0);
+    expect(parsed.items).toHaveLength(MAX_ITEMS_PER_DAY);
+  });
+
+  it('still fails when the meals themselves are wrong', () => {
+    // The meals are the health-relevant content and stay strict.
+    const broken = { ...VALID_DAY, items: VALID_DAY.items, b: { n: 'Nameless' } };
+    expect(() => parseDay(JSON.stringify(broken), 0)).toThrow(/failed validation/);
+  });
+
+  it('names what drifted, so a log says more than "something"', () => {
+    const broken = { ...VALID_DAY, b: { n: 'Nameless' } };
+    expect(() => parseDay(JSON.stringify(broken), 3)).toThrow(/Day 3 failed validation at: b\./);
   });
 });

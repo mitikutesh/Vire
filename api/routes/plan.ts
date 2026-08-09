@@ -8,6 +8,7 @@ import { UnauthorizedError, userIdFromClaims } from '../auth/identity';
 import { bearerToken, type TokenVerifier } from '../auth/verifier';
 import type { VireStore } from '../db/store';
 import type { ProviderForUser } from '../ai/for-user';
+import { classifyProviderError } from '../ai/types';
 import type { AiProvider, GeneratedDay } from '../ai/types';
 
 /**
@@ -29,7 +30,18 @@ import type { AiProvider, GeneratedDay } from '../ai/types';
 export const GENERATE_LIMIT_PER_DAY = 10;
 
 /** Attempts per day before the week is declared failed. */
-const ATTEMPTS_PER_DAY = 2;
+const ATTEMPTS_PER_DAY = 3;
+
+/**
+ * How many days generate at once.
+ *
+ * Seven at once was the prototype's shape, and it is the wrong shape for a
+ * personal API key: a new key's per-minute allowance is modest, and seven
+ * simultaneous requests are the easiest way to trip it. Three keeps the week well
+ * inside the 45-second budget while leaving headroom — the budget was always a UX
+ * target rather than a platform limit.
+ */
+const CONCURRENT_DAYS = 3;
 
 /**
  * Pause before retrying a day. Seven days generate in parallel, so the likeliest
@@ -37,6 +49,16 @@ const ATTEMPTS_PER_DAY = 2;
  * same overload and lose the week in under a second.
  */
 export const RETRY_DELAY_MS = 1_500;
+
+/**
+ * The wait after a rate limit, as opposed to after bad output.
+ *
+ * A provider's limit window is measured in a minute, so retrying 1.5 s later is
+ * very nearly guaranteed to be refused again — the original retry was tuned for
+ * malformed output and silently useless for the failure it was most likely to
+ * meet.
+ */
+export const RATE_LIMIT_DELAY_MS = 20_000;
 
 const sleep = (ms: number): Promise<void> =>
   ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
@@ -55,6 +77,8 @@ export interface PlanRouteDeps {
   now?: () => Date;
   /** Overridden to 0 in tests, so a retry test does not wait out the backoff. */
   retryDelayMs?: number;
+  /** Likewise; a rate-limit wait is twenty seconds in production. */
+  rateLimitDelayMs?: number;
 }
 
 /**
@@ -66,6 +90,7 @@ async function generateDayWithRetry(
   config: Parameters<AiProvider['generateDay']>[0],
   onState: (state: ReportedDayState) => Promise<void>,
   retryDelayMs: number,
+  rateLimitDelayMs: number,
 ): Promise<GeneratedDay | null> {
   await onState('run');
   for (let attempt = 0; attempt < ATTEMPTS_PER_DAY; attempt += 1) {
@@ -74,13 +99,26 @@ async function generateDayWithRetry(
       await onState('done');
       return day;
     } catch (error) {
+      const refusal = classifyProviderError(error);
+      // A rejected key will be rejected again, however long we wait. Retrying
+      // spends the user's quota on a certainty.
+      if (refusal?.kind === 'unauthorized') {
+        console.error(`Day ${config.weekday}: provider rejected the API key`);
+        await onState('fail');
+        return null;
+      }
+
       // Last attempt: report it. Earlier ones are retried silently, since a
       // transient malformed response is not news to the user.
       if (attempt === ATTEMPTS_PER_DAY - 1) {
-        console.error(`Day ${config.weekday} failed after ${ATTEMPTS_PER_DAY} attempts`, error);
+        console.error(
+          `Day ${config.weekday} failed after ${ATTEMPTS_PER_DAY} attempts: ` +
+            `${error instanceof Error ? `${error.name}: ${error.message}` : 'unknown'}`,
+        );
         await onState('fail');
       } else {
-        await sleep(retryDelayMs);
+        // A rate limit needs a real wait; bad output needs only a moment.
+        await sleep(refusal?.kind === 'rate_limited' ? rateLimitDelayMs : retryDelayMs);
       }
     }
   }
@@ -99,6 +137,7 @@ export function planRoutes({
   providerFor,
   now = () => new Date(),
   retryDelayMs = RETRY_DELAY_MS,
+  rateLimitDelayMs = RATE_LIMIT_DELAY_MS,
 }: PlanRouteDeps) {
   const app = new Hono();
 
@@ -133,9 +172,23 @@ export function planRoutes({
       // cannot parse is a type error rather than a silent no-op in the browser.
       const send = (event: PlanStreamEvent) => stream.writeSSE({ data: JSON.stringify(event) });
 
-      const results = await Promise.all(
-        WEEKDAYS.map((weekday) =>
-          generateDayWithRetry(
+      /**
+       * Days run a few at a time rather than all seven at once.
+       *
+       * Each finished day still reports as soon as it lands, so the gate's list
+       * fills in the same way; what changes is how many requests the provider sees
+       * simultaneously. Seven at once is the surest way to trip a personal key's
+       * per-minute allowance, and a rate-limited day costs a 20-second wait —
+       * which is far more than the concurrency buys back.
+       */
+      const results: (GeneratedDay | null)[] = new Array(WEEKDAYS.length).fill(null);
+      const queue = [...WEEKDAYS];
+
+      const worker = async () => {
+        for (;;) {
+          const weekday = queue.shift();
+          if (weekday === undefined) return;
+          results[weekday] = await generateDayWithRetry(
             provider,
             {
               weekday,
@@ -146,9 +199,12 @@ export function planRoutes({
             },
             (state) => send({ type: 'day', day: weekday, state }),
             retryDelayMs,
-          ),
-        ),
-      );
+            rateLimitDelayMs,
+          );
+        }
+      };
+
+      await Promise.all(Array.from({ length: CONCURRENT_DAYS }, worker));
 
       if (results.some((day) => day === null)) {
         const failed = results.flatMap((day, i) => (day === null ? [i] : []));

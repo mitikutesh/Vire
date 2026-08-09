@@ -37,7 +37,16 @@ export interface DayConfig {
  * because they are markedly cheaper in output tokens, and this is the bulkiest
  * part of the response.
  */
+export const MAX_ITEMS_PER_DAY = 16;
+
 export const generatedDaySchema = dayPlanSchema.extend({
+  // The bounds are looser than the prompt asks for on purpose. The *meals* are
+  // the health-relevant content and stay strict; the grocery rows are a
+  // convenience the shopping list aggregates. `sanitiseItems` clamps and filters
+  // this before validation, because throwing away a day with five good meals
+  // because it listed seventeen ingredients is the wrong trade — and it is a
+  // failure that shows up on some days and not others, which is worse than a
+  // consistent one.
   items: z
     .array(
       z
@@ -45,8 +54,8 @@ export const generatedDaySchema = dayPlanSchema.extend({
         .min(4)
         .max(5),
     )
-    .min(5)
-    .max(16),
+    .min(1)
+    .max(MAX_ITEMS_PER_DAY),
 });
 export type GeneratedDay = z.infer<typeof generatedDaySchema>;
 
@@ -99,6 +108,40 @@ export class OfferScanUnsupportedError extends Error {
     );
     this.name = 'OfferScanUnsupportedError';
   }
+}
+
+/**
+ * The provider refused the request rather than answering it badly.
+ *
+ * Separated from `AiOutputError` because the right response differs: a rate limit
+ * wants a real wait, a rejected key wants the user to fix the key, and neither is
+ * "the meals came back wrong".
+ */
+export class AiRequestError extends Error {
+  constructor(
+    readonly kind: 'rate_limited' | 'unauthorized' | 'unavailable',
+    message: string,
+    cause?: unknown,
+  ) {
+    super(message, { cause });
+    this.name = 'AiRequestError';
+  }
+}
+
+/** Turn a provider SDK error into one of the kinds above, or null if it is not one. */
+export function classifyProviderError(error: unknown): AiRequestError | null {
+  const status = (error as { status?: unknown })?.status;
+  if (typeof status !== 'number') return null;
+  if (status === 429) {
+    return new AiRequestError('rate_limited', 'The provider is rate-limiting requests', error);
+  }
+  if (status === 401 || status === 403) {
+    return new AiRequestError('unauthorized', 'The provider rejected the API key', error);
+  }
+  if (status >= 500) {
+    return new AiRequestError('unavailable', 'The provider is unavailable', error);
+  }
+  return null;
 }
 
 /** The model returned something that is not a usable plan. */
