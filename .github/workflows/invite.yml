@@ -1,0 +1,67 @@
+name: Invite
+
+# Who may register. Registration is invite-only (PLAN §2, decision 4), and the
+# allowlist lives in an SST secret read by the Cognito pre-sign-up trigger.
+#
+# This exists so inviting someone is a button rather than a laptop with AWS
+# credentials on it.
+on:
+  workflow_dispatch:
+    inputs:
+      emails:
+        description: >
+          Allowed addresses, comma-separated. A leading @ allows a whole domain,
+          e.g. "me@example.com, @mycompany.com". REPLACES the current list.
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+# Shares the deploy lock: this job ends in `sst deploy`, so it must not race a
+# deploy triggered by a push.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  invite:
+    name: Set the sign-up allowlist
+    runs-on: ubuntu-latest
+    # Required, not cosmetic: the IAM trust policy is pinned to the subject
+    # `...:environment:production`, so a job without this environment presents a
+    # different claim and cannot assume the role.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: vire-invite-${{ github.run_id }}
+
+      - name: Set the allowlist
+        # Passed as an environment variable rather than interpolated into the
+        # command. `${{ inputs.emails }}` inline would be substituted into the
+        # shell before it runs, so an input containing shell metacharacters would
+        # execute. Only a collaborator can dispatch this, but the safe form costs
+        # nothing.
+        env:
+          EMAILS: ${{ inputs.emails }}
+        run: npx sst secret set SignupAllowlist "$EMAILS" --stage prod
+
+      - name: Deploy, so the trigger picks up the new list
+        # Not optional. SST bakes a secret's value into the function bundle at
+        # deploy time and decrypts it at cold start, so setting the secret alone
+        # leaves the pre-sign-up trigger enforcing the previous list.
+        run: npx sst deploy --stage prod
