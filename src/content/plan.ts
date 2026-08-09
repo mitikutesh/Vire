@@ -34,6 +34,27 @@ export const SLOT_BOUNDS = {
   eveningUntil: 23,
 } as const;
 
+/**
+ * Head-start scheduling bounds (E7.8).
+ *
+ * Deliberately **not** derived from `GREETING_BOUNDS` or `SLOT_BOUNDS.dayStart`,
+ * both of which start the day at 05:00. The app is willing to *greet* you at
+ * 05:30; that is not the same as being willing to *wake* you, and a reminder
+ * pinned to a greeting boundary would move every time someone edited copy.
+ *
+ * The worked case this exists for: dinner at 18:12 with a 12-hour thaw and an
+ * hour of buffer computes to 05:12, which clears a 05:00 check and rings while
+ * the cook is asleep.
+ */
+export const PREP = {
+  wakeFrom: 7,
+  wakeUntil: 21.5,
+  /** When the evening digest goes out. */
+  digestAt: 20.5,
+  /** Default slack, so a reminder is not just-in-time. Settable per user. */
+  defaultBufferMin: 60,
+} as const;
+
 /** Greeting boundaries (hours) — see strings.now.greeting. */
 export const GREETING_BOUNDS = {
   quietUntil: 5,

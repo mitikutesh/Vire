@@ -47,6 +47,17 @@ export interface DayConfig {
  */
 export const MAX_ITEMS_PER_DAY = 16;
 
+/**
+ * Prep-stage bounds (E7.7), enforced in `sanitisePrep` before validation.
+ *
+ * The floor is the interesting one: a head start is only worth a notification
+ * where it exceeds a normal cooking window, and without it the model cheerfully
+ * annotates "chop the onions, lead 15" on every meal of the week.
+ */
+export const MIN_PREP_LEAD_MIN = 60;
+export const MAX_PREP_LEAD_MIN = 1440;
+export const MAX_PREP_STAGES = 3;
+
 export const generatedDaySchema = dayPlanSchema.extend({
   // The bounds are looser than the prompt asks for on purpose. The *meals* are
   // the health-relevant content and stay strict; the grocery rows are a

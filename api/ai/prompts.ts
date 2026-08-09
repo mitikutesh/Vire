@@ -23,6 +23,36 @@ export const NO_DASH_RULE =
   ' Never use em dashes or en dashes in any string: write plain sentences with' +
   ' commas, full stops or semicolons, and a plain hyphen for number ranges.';
 
+/**
+ * Head-start annotation (E7.7).
+ *
+ * Three rules that each fix a specific failure:
+ *
+ *  - **The window is a contract about the text.** `do` is fired at any instant in
+ *    [lead, leadMax], so it must be safe at all of them. An instruction written
+ *    for a 90-minute lead ("cook the potatoes for tomorrow's salad") says nothing
+ *    about chilling, and cooked starch left at room temperature overnight is the
+ *    textbook Bacillus cereus case. The model's words were fine; firing them at
+ *    the wrong hour is what made them dangerous, so the words must cover the hour.
+ *  - **Schedulability**, so the app is not left holding a stage nobody can act on.
+ *  - **Guardrail 7**, stated positively. This bans tempering a roast on the
+ *    counter, which the Saturday slow-cooking theme actively invites; the ban wins.
+ */
+export const PREP_RULE =
+  ' If a meal genuinely needs a head start (soaking, marinating, thawing, slow' +
+  ' cooking, dough), add prep: at most 3 objects' +
+  ' {lead, leadMax, active, do}, where lead is minutes before serving the stage' +
+  ' starts, leadMax is the longest still-safe lead (omit it when the stage must' +
+  ' happen at lead), active is hands-on minutes and do is at most 8 words.' +
+  ' Only add prep where lead is at least 60;' +
+  ' ordinary chopping and cooking is not a head start. The instruction must be' +
+  ' correct and food-safe at EVERY point between lead and leadMax, so if that' +
+  ' range crosses a night the instruction itself must say to refrigerate or cover.' +
+  ' Thaw in the refrigerator only; never leave fish, meat or dairy at room' +
+  ' temperature. Assume the cook is asleep between 21:30 and 07:00: a stage that' +
+  ' could only ever start in those hours must be redesigned or the dish changed.' +
+  ' Snacks get no prep.';
+
 /** Per-slot kcal budgets, rounded to 10, from the daily target. */
 export function slotBudgets(target: number): Record<string, number> {
   return Object.fromEntries(
@@ -63,6 +93,7 @@ export function dayGenerationPrompt(config: DayConfig): string {
     ' [finnishShopName, EnglishName, cat, quantity, optional 1 if a pantry staple such as oil' +
     ' or spice], where cat is exactly one of fish|dairy|produce|grain|pantry, at most 16 items' +
     ' (merge similar ones). Keep every string short.' +
+    PREP_RULE +
     NO_DASH_RULE
   );
 }

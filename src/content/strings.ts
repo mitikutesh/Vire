@@ -311,6 +311,26 @@ export const t = {
     exerciseMinutes: (min: number) => `${min} min`,
   },
 
+  // E7.8: what to start now, or tonight, so a later meal is ready on time.
+  prep: {
+    todayTitle: 'Worth starting now',
+    // The evening digest. Deliberately one heading over a list rather than one
+    // card per task: two head starts is one interruption, not two.
+    tonightTitle: 'Before bed, for tomorrow',
+    // Says which meal it is for, because "soak the chickpeas" alone does not
+    // tell you whether it can wait.
+    forMeal: (slotLabel: string, mealName: string) => `${slotLabel.toLowerCase()}: ${mealName}`,
+    startAt: (time: string) => `Start ${time}`,
+    activeMinutes: (min: number) => `${min} min hands-on`,
+    // A window that has closed. Offering the swap is the point: a reminder for
+    // something no longer achievable is guilt, not help.
+    tooLateTitle: 'That one needed an earlier start',
+    tooLateBody: (mealName: string) => `${mealName} needed a head start that has passed.`,
+    tooLateAction: 'Log something else instead',
+    // Health guardrail 7, on every surface that shows prep.
+    safetyNote: 'Thaw in the fridge, never on the counter.',
+  },
+
   today: {
     title: "Today's plan",
     eatenBurned: (eaten: number, burned: number) => `Eaten ${eaten} · burned +${burned}`,

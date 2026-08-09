@@ -1,13 +1,15 @@
 import { Check, Clock, Droplets, Footprints, Moon, Scale } from 'lucide-react';
 import type { DailyLogHandle } from '@/data/useVireData';
-import { EX, MOVE_WINDOW } from '@/content/plan';
+import { EX, MOVE_WINDOW, PREP } from '@/content/plan';
 import { DAY_NAMES, SLOT_LABEL, t } from '@/content/strings';
 import { NIGHT, getSlotKey, greetingFor, hourOf, weekdayIdx } from '@/domain/clock';
 import { eatenKcal, firstNameOf, isSwap, remainingKcal, waterGoalGlasses } from '@/domain/log';
+import { headStarts } from '@/domain/prep';
 import type { Meal, Profile, SlotEntry, StoredPlan } from '@/domain/schema';
 import { CustomEat } from '@/ui/CustomEat';
 import { DayStrip } from '@/ui/DayStrip';
 import { DetailsToggle } from '@/ui/DetailsToggle';
+import { HeadStartCard } from '@/ui/HeadStartCard';
 import { MacroChips } from '@/ui/MacroChips';
 import { Ring } from '@/ui/Ring';
 
@@ -49,6 +51,12 @@ export function NowView({
   const day = plan.days[wd];
   const exercise = EX[wd];
 
+  // E7.8. Split at render rather than in the domain so the two lists stay one
+  // computation: "tonight" is the same placement, told a different way.
+  const heads = headStarts(plan.days, now, profile.timezone, PREP.defaultBufferMin);
+  const prepToday = heads.filter((item) => !item.tonight);
+  const prepTonight = heads.filter((item) => item.tonight);
+
   const waterGoal = waterGoalGlasses(profile.waterMl);
   const eaten = eatenKcal(log, day);
   const remaining = remainingKcal(log, day, wd, profile.target);
@@ -69,6 +77,8 @@ export function NowView({
       </div>
 
       <DayStrip nowHour={hour} log={log} />
+
+      <HeadStartCard today={prepToday} tonight={prepTonight} />
 
       {slot === NIGHT ? (
         <NightCard breakfast={plan.days[(wd + 1) % 7].b} />

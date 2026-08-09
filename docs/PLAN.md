@@ -136,10 +136,19 @@ Web Push is no longer the obvious first choice on this app's primary device:
   (16.4+), permission must come from a real tap, and Safari can drop the
   subscription silently, so it needs re-subscribe handling. Vire has no service
   worker yet, so E5.1 is a prerequisite.
-- A **subscribed `.ics` feed** reaches the same lock screen, and the Apple Watch,
-  with no install, no permission prompt and no service worker. Server-side it is
-  one authenticated GET returning `text/calendar`: no scheduler, no push
-  service, no subscription lifecycle.
+- A **subscribed `.ics` feed** needs no install, no permission prompt and no
+  service worker. Server-side it is one authenticated GET returning
+  `text/calendar`: no scheduler, no push service, no subscription lifecycle.
+
+**Correction (review, same day).** The sentence above originally claimed the
+feed "reaches the same lock screen, and the Apple Watch". That oversold it, and
+the overstatement was load-bearing for the recommendation. `VALARM` on
+_subscribed_ calendars is client-dependent: macOS strips alerts from
+subscriptions, Google Calendar ignores `VALARM` on URL subscriptions, and iOS
+has a per-calendar "Remove Alerts" toggle. Whether an alarm actually fires on
+the owner's phone is now a **gate on E7.9**, cleared by subscribing to
+`docs/probe/prep-alarm-probe.ics` and watching for the alert. If it does not
+fire, the feed is a planning surface and E5.2 Web Push moves back ahead of it.
 
 Neither option has meaningful running cost (the sweep is ~$0.004/mo; browser
 push services are free), so the decision is engineering effort and reliability,

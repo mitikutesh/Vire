@@ -31,9 +31,9 @@ sign-in.
 | E2.3 → E5.4                       | ⬜ next    | Implementable locally; see below                                                              |
 | E6.1 → E6.4 (iOS)                 | 🔒 blocked | Needs Xcode, an Apple Developer account and a device/TestFlight                               |
 | E7.5 Kesko API                    | ❌ closed  | Portal admits only Azure AD identities Kesko onboards — no route for an individual (PLAN §12) |
-| E7.7 Prep lead times              | ⬜ planned | Owner request; AI annotates at generation time, guardrail 7                                   |
+| E7.7 Prep windows on meals        | ⬜ planned | Owner request; lead..leadMax annotated at generation time, guardrail 7                        |
 | E7.8 Head-start + evening digest  | ⬜ planned | Owns scheduling for every channel; never fires at night                                       |
-| E7.9 Calendar subscription feed   | ⬜ planned | Precedes E5.2 Web Push — see PLAN §5a revision                                                |
+| E7.9 Calendar subscription feed   | 🔒 gated   | Needs a VALARM alarm seen firing on a real iPhone first — see the story                       |
 
 **What is still unverified.** The OIDC bootstrap, the secrets and
 `sst deploy --stage prod` are all done, and CI has deployed green twice. What
@@ -664,150 +664,207 @@ generation.
   an already-deployed table risks replacement, so it is a decision to take
   deliberately rather than a change to slip in (PLAN §4b).
 
-### E7.7 — Prep lead times on generated meals (M) ← owner request
+### E7.7 — Prep windows on generated meals (M) ← owner request
 
 Meals that need a head start say so in the plan, so the app can answer _when to
-start_ rather than only what to cook. A lunch built on dried beans is not a
-noon problem, it is a 21:00-yesterday problem, and nothing in the plan currently
-knows that.
+start_ rather than only what to cook. A lunch built on dried beans is not a noon
+problem, it is a 21:00-yesterday problem, and nothing in the plan knows that.
+
+**Revised after review (2026-08-09): a stage is a window, not a point.** The
+first draft gave each stage one ideal `lead` and let the scheduler move it when
+that landed at night. Two defects killed that (see E7.8), and both dissolve if
+the model states the _range_ over which a stage is safe. Scheduling then places
+inside the range and never moves anything.
 
 - AC: `prep` is an optional array of stages on a meal —
-  `{ lead: minutes before serving, active: hands-on minutes, do: string,
-elastic: boolean }`.
-  **Staged, not a single number**: soaking is eight hours of waiting and three
-  minutes of attention, and one figure cannot say both. The user needs `lead` to
-  know when to start and `active` to know whether they can fit it in.
-- AC: **`elastic` is what makes the evening digest correct** (E7.8). Soaking,
-  marinating and fridge-thawing can start hours earlier than ideal with no harm,
-  so they can be pulled back to the previous evening. Taking a roast out to come
-  to room temperature, or boiling pasta, cannot: doing those eight hours early is
-  either useless or unsafe. Without this flag the scheduler has no way to tell
-  "start this tonight instead" from "start this in the middle of the night",
-  and would have to guess on exactly the cases where guessing wrong spoils food.
-- AC: **the generator avoids meals nobody can cook.** The prompt constrains
-  generated days so no meal needs a _rigid_ stage to begin between 23:00 and
-  07:00, given the slot serve times. Preventing the case is better than handling
-  it, and the constraint is cheap: it rules out a small tail of recipes, not a
-  cuisine. If it ever collides with a day theme or the cholesterol-friendly
-  constraints, the theme yields — a meal the cook has to set an alarm for at
-  03:00 is not a meal this app should have suggested.
-- AC: optional, so the plan schema stays `v: 1` and every stored plan already out
-  there reads as "no prep needed" rather than breaking.
+  `{ lead: minutes before serving, leadMax?: minutes, active: hands-on minutes,
+do: string }`. A stage may start anywhere in `[serve − leadMax, serve − lead]`.
+  `leadMax` absent means **rigid**: it starts at `lead` or not at all.
+- AC: **staged, not a single number.** Soaking is eight hours of waiting and
+  three minutes of attention; one figure cannot say both. `lead` says when to
+  start, `active` says whether it fits in the evening.
+- AC: **`leadMax` is an integer, not an `elastic` boolean.** A boolean cannot
+  bound the stretch: "soak, elastic" pulled to the previous evening can quietly
+  become twenty hours, which is fine for peas and ruins yeast dough or an acid
+  marinade on fish. That is per-stage knowledge only the model has while it is
+  writing the recipe.
+- AC: **the window is a contract about the text.** The prompt requires `do` to be
+  correct and food-safe at _every_ point in the window, and if `leadMax` crosses
+  an overnight the instruction must itself say to refrigerate or cover. This is
+  the fix for the hazard in E7.8 finding 2: an instruction written for a
+  90-minute lead ("cook the potatoes for tomorrow's salad") says nothing about
+  chilling, and cooked starch left out overnight is the textbook _Bacillus
+  cereus_ case. The model's words were fine; moving them was what made them
+  dangerous.
+- AC: optional, so the plan schema stays `v: 1` and every stored plan reads as
+  "no prep needed" rather than breaking.
 - AC: **the model annotates during the generation call it already makes.** No
-  runtime AI, no second provider round-trip, no added latency, and the answer
-  works offline forever after. A keyword table in code cannot tell dried
-  chickpeas from tinned — which is the entire distinction the feature rests on —
-  and the ingredient text is a Finnish/English mix that makes matching worse.
-- AC: **clamped at the parse boundary**, like every other field of model output
-  (`api/ai/parse.ts`): at most 3 stages, `lead` ≤ 24 h, `active` ≤ `lead`,
-  `do` ≤ 60 chars. A stage that violates these is dropped; the day survives.
-  Model output is untrusted input here exactly as it is everywhere else.
-- AC (guardrail 7): thawing is refrigerator-only, and no fish, meat or dairy is
-  held at room temperature. Prompt rule plus a standing line wherever prep is
-  shown. See PLAN §7.7 for why this guardrail is different in kind from the rest.
+  runtime AI, no second round-trip, no added latency, and the answer works
+  offline afterwards. Code cannot tell dried chickpeas from tinned, which is the
+  whole distinction, and the ingredient text is a Finnish/English mix that makes
+  matching worse.
+- AC: **clamped at the parse boundary** (`api/ai/parse.ts`), because model output
+  is untrusted input here as everywhere: at most 3 stages, `60 ≤ lead ≤ 1440`,
+  `lead ≤ leadMax ≤ 1440`, `active ≤ lead`, `do` ≤ 60 chars. A violating stage is
+  dropped; the day survives.
+- AC: **a lead floor of 60 min**, or the model annotates "chop the onions,
+  lead 15" on all 35 meals and the feature becomes noise. A head start begins
+  where a normal cooking window ends.
+- AC: **no `prep` on `s` or `e`.** Snacks are assembly-only by schema
+  (`src/domain/schema.ts`) — no steps, no video — and prep would quietly kill
+  that invariant.
+- AC: **parse drops any stage whose whole window is nocturnal**, logging it the
+  way `sanitiseItems` does. Prevention beats handling, and the prompt carries the
+  matching rule so the case is rare rather than routine.
+- AC (guardrail 7): thawing is refrigerator-only; no fish, meat or dairy held at
+  room temperature. Stated positively in the prompt, and covered by a red-team
+  fixture asserting no stage instructs counter-resting raw protein — parse cannot
+  inspect semantics, so this guardrail lives in prompt plus fixtures, and the
+  suite should say so. Note this bans tempering a roast, which the Saturday
+  "weekend slow cooking" theme actively invites; the ban wins.
 - AC: the starter week carries hand-authored `prep` — it is curated, not
   generated, so it cannot inherit the annotations for free.
-- AC: a one-shot backfill annotates the _active_ week in a single call, so nobody
-  has to regenerate a week they are happy with just to gain the feature.
+- AC: backfill of an existing week is **per day, through the existing retry and
+  parse path**, not one call for 35 meals. E2.1 abandoned the single-call shape
+  because of drift, and this would reintroduce it. Rate-limited like every other
+  AI route.
 
 ### E7.8 — Head-start scheduling and the evening digest (M)
 
-The in-app surface, and the scheduling rules every delivery channel obeys.
-Ships before E7.9 because it needs no delivery mechanism at all, and because it
-owns the logic the calendar feed renders — there is one scheduler, not one per
-channel.
+The scheduling rules every delivery channel obeys, plus the in-app surface.
+Ships before E7.9 because it needs no delivery mechanism, and because it owns
+the logic the calendar feed renders — one scheduler, not one per channel.
 
-**The rule that shapes the whole design (owner directive, 2026-08-09).**
+**The rule that shapes the design (owner directive, 2026-08-09).**
 
-A twelve-hour lead on a 12:00 lunch computes to a 00:00 start. Firing then is
-worse than not firing: it wakes someone for a task they will not do, and it
-teaches them to silence the app. The naive fix — clamp it forward into waking
-hours — is worse still, because moving a reminder **later** means the food is
-late. A 04:00 soak pushed to 07:00 is lunch at 15:00.
+A twelve-hour lead on a 12:00 lunch computes to a midnight start. Firing then is
+worse than not firing: it wakes someone for a task they will not do, and teaches
+them to silence the app.
 
-So the scheduler never moves a reminder later. It only ever moves it **earlier**,
-and the earliest useful moment is the evening before.
+**What the review killed.** The first draft clamped such a reminder to the
+previous evening and reworded it "do this tonight". That was unsound twice over:
 
-**Scheduling rules, in order:**
+1. It contradicted its own premise. "Never move later, because the food would be
+   late" breaks for any lead longer than serve-minus-previous-evening — roughly
+   15 h for lunch. A 24 h brine for Wednesday lunch ideally starts Tuesday noon;
+   the fallback moved it to Tuesday 21:30, **9.5 hours later**, silently cutting
+   the brine to 14.5 h.
+2. It reused instruction text authored for a different time of day, which is how
+   the _scheduler_ — not the model — creates a food-safety hazard (E7.7).
+
+**What replaces it: place inside the window, never move.** A stage is valid
+anywhere in `[serve − leadMax, serve − lead]`. Placement is one deterministic
+pure function:
 
 1. `serve` comes from `DAY_STRIP.dots` (b 7.5, l 12, s 15, d 18.2, e 20.5) —
-   already the app's single source of truth for when a meal lands. No second
-   table to drift out of step with the DayStrip.
-2. `idealStart = serve − max(stage.lead) − buffer`. Buffer defaults to 60 min
-   and is settable; the owner's stated want is an hour or two of slack to move
-   things around, not a just-in-time alarm.
-3. If `idealStart` falls inside the **prep window** (`PREP_WINDOW`, default
-   07:00–22:30, settable), it is a same-day reminder at that time. Note this is
-   deliberately narrower than `SLOT_BOUNDS.dayStart` (05:00) and
-   `GREETING_BOUNDS.quietUntil` — the app is willing to _greet_ you at 05:30,
-   which is not the same as being willing to _wake_ you.
-4. Otherwise the task moves to the **previous evening's digest** and its wording
-   changes from "start now" to "before bed" — because the user is being told at
-   20:30 about something whose ideal start is 00:00.
-5. A task may only be pulled backwards like this if every stage involved is
-   **elastic** (see E7.7): soaking, marinating and fridge-thawing are unharmed
-   or improved by starting earlier. A **rigid** stage cannot be, and a meal whose
-   rigid stage lands in the night is a meal the user cannot make on time.
+   already the app's single source of truth for when a meal lands, so there is no
+   second table to drift. Computed times round to the nearest 5 min, because
+   18.2 is a chart position and 17:12 reads like a machine wrote it.
+2. If `serve − lead − buffer` falls inside the **waking window**, schedule there.
+3. Otherwise take the latest instant of the window that _is_ inside a waking
+   window — in practice, membership in tonight's digest.
+4. If the window never intersects waking hours, the stage is **invalid**: it is
+   surfaced while the user is still choosing the week, never as a notification.
+   E7.7's generator constraint and parse rule make this rare.
 
-**The evening digest is the primary channel, not a fallback.**
+**The waking window is its own constant, not a greeting bound.** Default
+07:00–21:30. `GREETING_BOUNDS.quietUntil` is 5 and `SLOT_BOUNDS.dayStart` is 5:
+the app is willing to _greet_ you at 05:30, which is not the same as being
+willing to _wake_ you. Coupling alarm policy to greeting copy would mean editing
+a greeting silently moves alarms. (Review worked example: dinner 18:12 with a
+12 h thaw and a 60 min buffer computes to 05:12, which clears a `quietUntil = 5`
+check and fires while you are asleep — the exact case this feature exists to
+prevent.)
 
-One predictable notification per day at a user-set time (default 20:30, after
-dinner and before bed) listing everything tomorrow needs a head start on. This
-is better than N scattered per-stage alarms on every axis that matters here:
-it is one interruption instead of several, it arrives at a time the user has
-chosen rather than one arithmetic picked, it is the same time every day so it
-becomes a habit rather than a surprise, and it structurally cannot land at
-04:00. Per-stage same-day reminders remain, but only for tasks that genuinely
-fall inside the prep window.
+**The evening digest is the primary channel.** One predictable notification at a
+user-set time (default 20:30) listing everything tomorrow needs a head start on,
+with each item's `active` minutes. Better than scattered per-stage alarms on
+every axis that matters: one interruption instead of three, at a time the user
+chose rather than one arithmetic picked, the same time daily so it becomes habit,
+computable a full day ahead (so it is immune to feed refresh lag and to DST
+arithmetic), and structurally incapable of landing at 04:00. Same-day per-stage
+reminders remain, but only for stages already inside the waking window — which
+is every rigid stage by definition, so no night logic is needed for them.
 
-This also matches the temperament the repo already commits to: it refuses
-streaks and badges because "a streak turns one bad Tuesday into a reason to
-give up." The same argument applies to interruptions.
+This also settles a contradiction the review found between the stories: E7.8
+refused scattered interruptions in-app while E7.9 mandated one alarm per stage on
+the lock screen.
 
-- AC: Now and Today show what needs starting and by when; the digest is the
-  same data rendered as one evening summary.
-- AC: **never fires inside the prep window's night.** This is the acceptance
-  criterion the owner asked for by name, and it holds for every channel.
-- AC: **reminders move earlier, never later.** A test asserts that no computed
-  time is ever after `idealStart`.
-- AC: a meal needing a **rigid** start inside the night is surfaced at _plan_
-  time — flagged on the Week view with an offer to swap that meal — never as a
-  notification anybody could act on. Telling someone at 20:30 that they must get
-  up at 03:00 is not a reminder, it is a problem to solve while they are still
-  choosing the week.
-- AC: **consolidated.** Tomorrow's lunch and dinner both needing a head start is
-  one entry, not two.
-- AC: silent once the meal is logged or swapped — reminding someone to prepare
-  food they have already eaten is the fastest way to teach them to ignore it.
+- AC: **never fires inside the night.** The criterion the owner asked for by
+  name; it holds for every channel.
+- AC: **nothing is ever moved outside its own window**, in either direction. A
+  test asserts every scheduled instant lies within `[serve − leadMax,
+serve − lead]`.
+- AC: per-stage scheduling is defined once; the card consolidates for _display_.
+  Two meals needing a head start tomorrow is one entry, not two.
+- AC: silent once the meal is logged or swapped. **Scoped to the in-app card** —
+  a pull feed with an hour of refresh lag cannot honour it, and claiming
+  otherwise in E7.9 would be a promise the transport cannot keep.
+- AC: **a passed moment shows "too late — swap this meal?"**, pointing at the
+  swap flow, not a stale instruction. A reminder for something unachievable is
+  guilt, not help.
+- AC: the regenerate confirmation warns that tonight's prep may no longer apply —
+  soaking beans on Sunday and regenerating on Monday is otherwise silent waste.
 - AC: **breakfast is the hard case and gets its own tests.** Serving at 07:30
-  means almost _any_ lead pushes it into the previous evening, so breakfast prep
-  is effectively always a digest item. If that reads badly, the generator
-  constraint in E7.7 is the fix, not a scheduling hack.
-- AC: pure functions in `src/domain/`, unit tested. **Including both Europe/
-  Helsinki DST transitions**: on the March day that has 23 hours and the October
-  day that has 25, "eight hours before noon" is the case that silently breaks
-  naive arithmetic, and both directions need a test.
+  means nearly any lead is nocturnal, so breakfast prep is structurally "tonight
+  or nothing", which only the digest handles gracefully.
+- AC: `active` is display-only and never enters the scheduling math.
+- AC: the buffer stays settable (owner asked for "an hour or two of slack") but
+  **only shifts placement inside an already-valid window** — it never decides
+  validity, which keeps the boundary test matrix finite.
+- AC: **zone-aware pure functions in `src/domain/`, shared with the API.**
+  `clock.ts` is device-local-`Date` based; the feed runs in Lambda and must
+  compute in `profile.timezone`, so the shared functions take
+  (wall clock, IANA zone) and return instants via `Intl`. Tested across **both**
+  Europe/Helsinki transitions: 2026-03-29 (03:30 does not exist) and 2026-10-25
+  (03:30 happens twice).
 
-### E7.9 — Calendar subscription feed (M)
+### E7.9 — Calendar subscription feed (M) — GATED
 
 Real lock-screen and Watch alerts with no service worker, no permission prompt
-and no Home Screen install. See PLAN §5a for why this now precedes E5.2.
+and no Home Screen install. See PLAN §5a for why this precedes E5.2.
 
-- AC: `GET /calendar/<token>.ics` returns `text/calendar`: one `VEVENT` per prep
-  stage carrying a `VALARM`, covering the active week.
-- AC: **the token is the credential.** Calendar clients cannot authenticate, so
-  the URL is a long random per-user secret, revocable and reissuable from
-  Settings in one tap.
-- AC: the feed exposes **meal and prep times only**. Never weight, logs, targets
-  or account data — the blast radius of a leaked URL stays "someone knows when I
-  eat".
-- AC: stable `UID`s derived from plan id + weekday + slot + stage, so a refresh
-  updates events rather than duplicating them or re-firing alarms.
-- AC: `REFRESH-INTERVAL` / `X-PUBLISHED-TTL` hints set to an hour. A feed for a
-  reminder that is hours ahead does not need tighter polling, and the client
-  picks the rate regardless.
-- AC: no new AWS resource. It is one route on the Function URL already deployed,
-  reading one plan item — inside the free tier at any polling rate a client will
-  actually use.
-- AC: Settings shows the `webcal://` link with copy-to-clipboard and a plain
-  explanation of what subscribing does.
+**GATE, added by review (2026-08-09): do not build this until an alarm is seen
+to fire on the owner's own iPhone.** VALARM handling on _subscribed_ calendars is
+client-dependent — macOS strips alerts from subscriptions, Google Calendar
+ignores VALARM on URL subscriptions, and iOS carries a per-calendar "Remove
+Alerts" toggle. PLAN §5a originally claimed this "reaches the same lock screen
+with no permission prompt", which oversold it. Clearing the gate costs five
+minutes: subscribe to `docs/probe/prep-alarm-probe.ics`, wait for its alarm.
+If no alarm fires, this story becomes a _planning_ surface only and E5.2 Web
+Push moves back ahead of it.
+
+- AC: `GET /calendar/<token>.ics` returns `text/calendar`: one digest `VEVENT`
+  per day at the user's digest time, listing tomorrow's head starts. Same-day
+  per-stage events only if the owner finds he misses them.
+- AC: **a rolling materialised window, now → +7 days.** `Plan.days` is a weekday
+  tuple with no dates (`src/domain/schema.ts`), so "the active week" is not a
+  date range: a Monday-morning fetch would emit Sunday-evening events already in
+  the past, and the highest-lead meals — the ones this feature exists for — are
+  exactly the ones whose alarms would silently never fire.
+- AC: **UIDs carry the concrete date**, one event per occurrence. A weekday-keyed
+  UID gets a new `DTSTART` every week, and without a `SEQUENCE` bump many clients
+  ignore the change or re-alert unpredictably. Regeneration then replaces cleanly,
+  because a new `planId` yields new UIDs.
+- AC: **serialised with `TZID` plus a `VTIMEZONE` block**, never as server-computed
+  UTC instants. Delegating to the client makes Europe/Helsinki's DST transitions
+  the calendar app's correctly-solved problem rather than ours.
+- AC: **the token is the credential**, since calendar clients cannot authenticate:
+  a long random per-user secret, revocable and reissuable from Settings in one tap.
+- AC: **the token mapping cannot outlive the account.** Resolving token → user
+  needs a lookup item outside the `USER#` partition, and `deleteAll` walks only
+  that partition — so a naive `TOKEN#` item would survive account deletion as a
+  live credential. This is the exact shape of the `AIKEY`/`exportAll` coupling
+  E7.6 already had to fix. Create, rotate and delete handle the mapping
+  transactionally with the user-partition copy; the token joins `UNEXPORTABLE_SK`;
+  and the route masks the path in logs, because a Function URL access log captures
+  the token by default.
+- AC: **honest privacy wording.** A `VEVENT` needs a `SUMMARY`, which carries meal
+  names and `do` lines, so the blast radius of a leaked URL is "what and when I
+  cook" — not "meal times only" as first written. Still acceptable; it must be
+  stated accurately.
+- AC: Settings shows the `webcal://` link with copy-to-clipboard, plus expectation
+  copy telling the user to check that alerts are enabled for the subscription —
+  mirroring E5.2's iOS copy AC.
+- AC: no new AWS resource; one route on the Function URL already deployed,
+  reading one plan item.

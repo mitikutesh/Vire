@@ -255,6 +255,83 @@ describe('salvaging a day’s grocery rows', () => {
   });
 });
 
+describe('prep stages (E7.7)', () => {
+  const withPrep = (slot: 'b' | 'l' | 'd' | 's' | 'e', prep: unknown) => ({
+    ...VALID_DAY,
+    [slot]: { ...VALID_DAY[slot], prep },
+  });
+
+  it('keeps a well-formed head start', () => {
+    const raw = withPrep('l', [{ lead: 480, leadMax: 960, active: 5, do: 'Soak the chickpeas' }]);
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.l.prep).toHaveLength(1);
+    expect(parsed.l.prep?.[0]?.leadMax).toBe(960);
+  });
+
+  it('drops a lead too short to be a head start', () => {
+    // Without a floor the model annotates "chop the onions, lead 15" on all
+    // thirty-five meals and the feature becomes noise.
+    const raw = withPrep('l', [{ lead: 15, active: 5, do: 'Chop the onions' }]);
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.l.prep).toBeUndefined();
+  });
+
+  it('drops an inverted window, which has no valid instant in it', () => {
+    const raw = withPrep('l', [{ lead: 600, leadMax: 120, active: 5, do: 'Soak' }]);
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.l.prep).toBeUndefined();
+  });
+
+  it('drops hands-on time longer than the head start', () => {
+    const raw = withPrep('l', [{ lead: 60, active: 120, do: 'Simmer' }]);
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.l.prep).toBeUndefined();
+  });
+
+  it('refuses prep on a snack, which is assembly-only by schema', () => {
+    // s and e have no steps and no video; prep would quietly kill that invariant.
+    const raw = withPrep('s', [{ lead: 120, active: 5, do: 'Soak the oats' }]);
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.s.prep).toBeUndefined();
+  });
+
+  it('keeps the good stages and drops only the bad one', () => {
+    // Same trade as sanitiseItems: a meal whose food is fine is not lost
+    // because one line of timing advice was malformed.
+    const raw = withPrep('d', [
+      { lead: 720, leadMax: 1080, active: 3, do: 'Thaw the fish in the fridge' },
+      { lead: 5, active: 1, do: 'Open the packet' },
+    ]);
+    const parsed = parseDay(JSON.stringify(raw), 0);
+    expect(parsed.d.prep).toHaveLength(1);
+    expect(parsed.d.prep?.[0]?.do).toContain('Thaw');
+  });
+
+  it('caps the number of stages', () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({
+      lead: 120 + i,
+      active: 2,
+      do: `Stage ${i}`,
+    }));
+    const parsed = parseDay(JSON.stringify(withPrep('l', many)), 0);
+    expect(parsed.l.prep?.length).toBeLessThanOrEqual(3);
+  });
+
+  it('leaves a day with no prep completely alone', () => {
+    const parsed = parseDay(JSON.stringify(VALID_DAY), 0);
+    expect(parsed.l.prep).toBeUndefined();
+  });
+
+  it('asks the model for a window whose text is safe throughout', () => {
+    // The guardrail-7 fix: the instruction is fired anywhere in [lead, leadMax],
+    // so it must be correct at every point, including across a night.
+    const prompt = dayGenerationPrompt(config);
+    expect(prompt).toContain('food-safe at EVERY point');
+    expect(prompt).toContain('refrigerate');
+    expect(prompt).toContain('asleep between');
+  });
+});
+
 describe('dashes in generated copy', () => {
   it('rewrites an em dash the model put in a meal name or step', () => {
     // Generated text sits directly beside hand-written copy that has no em

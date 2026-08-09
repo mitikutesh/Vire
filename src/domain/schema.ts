@@ -23,6 +23,37 @@ export const grocCatSchema = z.enum(GROC_CATS);
 export const storeTagSchema = z.enum(STORE_TAGS);
 
 /**
+ * One stage of getting a meal ready ahead of time (E7.7).
+ *
+ * A **window, not a point.** The stage may begin anywhere between
+ * `serve − leadMax` and `serve − lead`, and the scheduler places it inside that
+ * range rather than moving it around. An earlier design gave each stage one
+ * ideal time and let the scheduler clamp it when that landed at night, which
+ * failed twice: for long leads the clamp moved the reminder *later* than ideal
+ * (silently cutting a 24 h brine to 14.5 h), and it fired instructions written
+ * for one time of day at another — "cook the potatoes for tomorrow's salad" says
+ * nothing about chilling, and cooked starch left out overnight is the textbook
+ * Bacillus cereus case.
+ *
+ * `leadMax` absent means **rigid**: the stage starts at `lead` or not at all. It
+ * is a number rather than an `elastic` flag because a boolean cannot say *how
+ * far* a stage stretches, and the answer differs per dish — peas soak happily
+ * for twenty hours, yeast dough over-proofs and an acid marinade turns fish to
+ * mush.
+ */
+export const prepStageSchema = z.object({
+  /** Minutes before serving this stage ideally starts. */
+  lead: z.number().int().min(60).max(1440),
+  /** Longest still-safe lead. Absent = rigid. */
+  leadMax: z.number().int().min(60).max(1440).optional(),
+  /** Hands-on minutes. Display only — never an input to scheduling. */
+  active: z.number().int().nonnegative(),
+  /** Must be correct at every point in the window (E7.7's text contract). */
+  do: z.string().min(1).max(60),
+});
+export type PrepStage = z.infer<typeof prepStageSchema>;
+
+/**
  * One meal. `fi` carries the Finnish dish name where one exists — the UI is
  * English but the food vocabulary is local, which is what makes the shopping
  * links work. Snacks are assembly-only: no steps, no video.
@@ -37,6 +68,9 @@ export const mealSchema = z.object({
   ing: z.array(z.string().min(1)).min(1).max(10), // ingredients, metric amounts
   st: z.array(z.string().min(1)).max(4).optional(), // ≤3 short steps; absent for snacks
   yt: z.string().min(1).optional(), // YouTube search term; absent for snacks
+  // Head-start stages (E7.7). Optional, so the schema stays v1 and every plan
+  // already stored reads as "nothing to start early".
+  prep: z.array(prepStageSchema).max(3).optional(),
 });
 export type Meal = z.infer<typeof mealSchema>;
 

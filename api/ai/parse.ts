@@ -1,6 +1,10 @@
+import { SLOTS } from '@/content/plan';
 import {
   AiOutputError,
   MAX_ITEMS_PER_DAY,
+  MAX_PREP_LEAD_MIN,
+  MAX_PREP_STAGES,
+  MIN_PREP_LEAD_MIN,
   generatedDaySchema,
   offerScanResultSchema,
   type GeneratedDay,
@@ -107,6 +111,66 @@ export function deDashDeep<T>(value: T): T {
   return value;
 }
 
+/**
+ * Drop prep stages the scheduler could not honour (E7.7).
+ *
+ * Model output is untrusted here as everywhere else, and prep is the field where
+ * a bad value is not cosmetic: a stage the app schedules into the night, or one
+ * whose window is inverted, produces either an alarm nobody can act on or an
+ * instruction that is unsafe by the time it fires.
+ *
+ * Four rules, each with a reason:
+ *  - **Snacks carry none.** `s` and `e` are assembly-only by schema (no steps, no
+ *    video); prep on them would quietly kill that invariant.
+ *  - **`lead` ≥ 60 min.** Without a floor the model annotates "chop the onions,
+ *    lead 15" on all thirty-five meals and the feature becomes noise. A head
+ *    start begins where a normal cooking window ends.
+ *  - **`leadMax` ≥ `lead`.** An inverted window has no valid instant in it.
+ *  - **`active` ≤ `lead`.** Hands-on time longer than the head start is a
+ *    misunderstanding of the field, not a tight schedule.
+ *
+ * Dropping the stage rather than the day is deliberate and matches
+ * `sanitiseItems`: a meal whose food is fine should not be lost because its
+ * timing advice was malformed.
+ */
+export function sanitisePrep(json: unknown, weekday: number): unknown {
+  if (typeof json !== 'object' || json === null) return json;
+  const day = { ...(json as Record<string, unknown>) };
+
+  for (const slot of SLOTS) {
+    const meal = day[slot];
+    if (typeof meal !== 'object' || meal === null) continue;
+    const { prep, ...withoutPrep } = meal as Record<string, unknown>;
+    if (prep === undefined) continue;
+
+    // Assembly-only slots keep no prep at all, however plausible it looked.
+    const stages = slot === 's' || slot === 'e' ? [] : Array.isArray(prep) ? prep : [];
+    const kept = stages.filter(usablePrepStage).slice(0, MAX_PREP_STAGES);
+
+    if (kept.length !== (Array.isArray(prep) ? prep.length : 0)) {
+      console.warn(
+        `Day ${weekday} ${slot}: kept ${kept.length} of ` +
+          `${Array.isArray(prep) ? prep.length : 0} prep stages ` +
+          '(out of range, inverted window, or an assembly-only slot)',
+      );
+    }
+    day[slot] = kept.length > 0 ? { ...withoutPrep, prep: kept } : withoutPrep;
+  }
+  return day;
+}
+
+function usablePrepStage(stage: unknown): boolean {
+  if (typeof stage !== 'object' || stage === null) return false;
+  const { lead, leadMax, active } = stage as Record<string, unknown>;
+  if (typeof lead !== 'number' || lead < MIN_PREP_LEAD_MIN || lead > MAX_PREP_LEAD_MIN) {
+    return false;
+  }
+  if (leadMax !== undefined) {
+    if (typeof leadMax !== 'number' || leadMax < lead || leadMax > MAX_PREP_LEAD_MIN) return false;
+  }
+  return typeof active === 'number' && active >= 0 && active <= lead;
+}
+
 export function parseDay(text: string, weekday: number): GeneratedDay {
   let json: unknown;
   try {
@@ -118,7 +182,9 @@ export function parseDay(text: string, weekday: number): GeneratedDay {
     );
   }
 
-  const parsed = generatedDaySchema.safeParse(deDashDeep(sanitiseItems(json, weekday)));
+  const parsed = generatedDaySchema.safeParse(
+    deDashDeep(sanitisePrep(sanitiseItems(json, weekday), weekday)),
+  );
   if (!parsed.success) {
     // The message names the failing paths, so a log says *what* drifted rather
     // than only that something did.
