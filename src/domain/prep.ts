@@ -1,6 +1,5 @@
 import { DAY_STRIP, PREP } from '@/content/plan';
 import type { DayPlan, Meal, PrepStage, SlotKey, WeekdayIndex } from './schema';
-import { addDays, dateKey, weekdayIdx } from './clock';
 
 /**
  * When to start cooking (E7.7 / E7.8).
@@ -59,23 +58,91 @@ export const serveHour = (slot: SlotKey): number =>
  * reads like a machine wrote it rather than a person choosing a time.
  */
 export function roundTo5(date: Date): Date {
-  const out = new Date(date);
-  out.setSeconds(0, 0);
-  out.setMinutes(Math.round(out.getMinutes() / 5) * 5);
-  return out;
+  // Rounded on the instant rather than through local getters: every real zone
+  // is offset by a whole multiple of five minutes, so the wall-clock result is
+  // the same everywhere, and this cannot pick up the runtime's zone by accident.
+  const FIVE_MIN = 5 * 60_000;
+  return new Date(Math.round(date.getTime() / FIVE_MIN) * FIVE_MIN);
 }
 
-/** Wall-clock hour as a fraction, in the given zone. 13:30 → 13.5. */
-export function hourInZone(instant: Date, timeZone: string): number {
+/**
+ * Wall-clock fields of an instant, in a named zone.
+ *
+ * Everything below reads the clock through this rather than through `Date`'s
+ * local-time getters. That is not fussiness: the browser runs in the user's own
+ * zone, where the two agree, but the calendar feed runs in Lambda under UTC,
+ * where they differ by hours — and a scheduler that thinks 05:12 is 02:12 will
+ * happily place a reminder in the middle of the night.
+ */
+export interface ZonedParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}
+
+export function zonedParts(instant: Date, timeZone: string): ZonedParts {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   }).formatToParts(instant);
-  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
-  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  const value = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
+  // `hour` comes back as 24 at midnight under some ICU versions.
+  return {
+    year: value('year'),
+    month: value('month'),
+    day: value('day'),
+    hour: value('hour') % 24,
+    minute: value('minute'),
+  };
+}
+
+/** Wall-clock hour as a fraction, in the given zone. 13:30 → 13.5. */
+export function hourInZone(instant: Date, timeZone: string): number {
+  const { hour, minute } = zonedParts(instant, timeZone);
   return hour + minute / 60;
+}
+
+/** `YYYY-MM-DD` as the user's calendar reads it, not the server's. */
+export function dateKeyInZone(instant: Date, timeZone: string): string {
+  const { year, month, day } = zonedParts(instant, timeZone);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** How far the zone is from UTC at this instant, in minutes. */
+function offsetMinutes(instant: Date, timeZone: string): number {
+  const p = zonedParts(instant, timeZone);
+  const asIfUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+  // Seconds are dropped on both sides, so compare on the same grid.
+  return (asIfUtc - Math.floor(instant.getTime() / 60_000) * 60_000) / 60_000;
+}
+
+/**
+ * The instant at which a zone's clock reads the given wall-clock time.
+ *
+ * Guess in UTC, measure the zone's offset there, correct, then measure again:
+ * the second pass is what handles a DST boundary, where the offset at the guess
+ * differs from the offset at the answer. On a spring-forward gap the result
+ * lands on the following real instant, which is the behaviour we want — a time
+ * that does not exist should not silently become one 24 hours away.
+ */
+export function instantAt(
+  parts: { year: number; month: number; day: number },
+  hour: number,
+  timeZone: string,
+): Date {
+  const wholeHour = Math.floor(hour);
+  const minute = Math.round((hour % 1) * 60);
+  const guess = Date.UTC(parts.year, parts.month - 1, parts.day, wholeHour, minute);
+  const first = guess - offsetMinutes(new Date(guess), timeZone) * 60_000;
+  const second = guess - offsetMinutes(new Date(first), timeZone) * 60_000;
+  return new Date(second);
 }
 
 /** Is this instant inside the user's waking window, in their own zone? */
@@ -127,8 +194,9 @@ export function placeStage(
   return {
     kind: 'placed',
     at,
-    // "Tonight" means the start falls on an earlier local date than the meal.
-    tonight: dateKey(at) !== dateKey(serve),
+    // "Tonight" means the start falls on an earlier date *on the user's
+    // calendar* than the meal — which is not the same question as the server's.
+    tonight: dateKeyInZone(at, timeZone) !== dateKeyInZone(serve, timeZone),
   };
 }
 
@@ -159,7 +227,7 @@ function pickWakingInstant(ideal: Date, earliest: Date, timeZone: string): Date 
 export function placeDay(
   day: DayPlan,
   weekday: WeekdayIndex,
-  serveDate: Date,
+  serveDate: ZonedParts,
   now: Date,
   timeZone: string,
   bufferMin: number,
@@ -170,7 +238,7 @@ export function placeDay(
   for (const slot of ['b', 'l', 'd'] as const) {
     const meal: Meal = day[slot];
     for (const stage of meal.prep ?? []) {
-      const serve = atHour(serveDate, serveHour(slot));
+      const serve = instantAt(serveDate, serveHour(slot), timeZone);
       const placement = placeStage(stage, serve, now, timeZone, bufferMin);
       if (placement.kind === 'placed') {
         placed.push({
@@ -198,19 +266,15 @@ export function placeDay(
   return { placed, unschedulable };
 }
 
-/** A date at a given fractional local hour. */
-export function atHour(date: Date, hour: number): Date {
-  const out = new Date(date);
-  out.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
-  return out;
-}
-
 /**
  * What the user should be told about right now.
  *
  * Looks at today and tomorrow, because a head start is by definition something
  * whose meal has not happened yet, and the longest lead the schema allows is
  * 24 hours.
+ *
+ * The day walk happens on the user's calendar, so "tomorrow" means tomorrow
+ * where they are rather than wherever the process happens to run.
  */
 export function headStarts(
   days: readonly DayPlan[],
@@ -219,14 +283,27 @@ export function headStarts(
   bufferMin: number,
 ): PlacedPrep[] {
   const out: PlacedPrep[] = [];
+  // Step from local noon, so adding a day cannot land inside a DST gap and
+  // silently shift the date.
+  const noon = instantAt(zonedParts(now, timeZone), 12, timeZone);
   for (const offset of [0, 1]) {
-    const serveDate = addDays(now, offset);
-    const weekday = weekdayIdx(serveDate);
+    const serveDay = zonedParts(new Date(noon.getTime() + offset * 86_400_000), timeZone);
+    const weekday = weekdayForZonedDate(serveDay);
     const day = days[weekday];
     if (!day) continue;
-    out.push(...placeDay(day, weekday, serveDate, now, timeZone, bufferMin).placed);
+    out.push(...placeDay(day, weekday, serveDay, now, timeZone, bufferMin).placed);
   }
   return out.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/** Monday = 0, from calendar fields rather than a runtime-local Date. */
+export function weekdayForZonedDate(parts: {
+  year: number;
+  month: number;
+  day: number;
+}): WeekdayIndex {
+  const utc = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  return ((utc.getUTCDay() + 6) % 7) as WeekdayIndex;
 }
 
 /**
@@ -245,6 +322,6 @@ export function eveningDigest(
   bufferMin: number,
 ): PlacedPrep[] {
   return headStarts(days, now, timeZone, bufferMin).filter(
-    (item) => item.tonight && dateKey(item.start) === dateKey(now),
+    (item) => item.tonight && dateKeyInZone(item.start, timeZone) === dateKeyInZone(now, timeZone),
   );
 }

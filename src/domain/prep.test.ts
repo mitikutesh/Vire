@@ -3,10 +3,11 @@ import { PREP } from '@/content/plan';
 import { starterPlan } from '@/content/starter-plan';
 import type { DayPlan, Meal, PrepStage } from './schema';
 import {
-  atHour,
+  dateKeyInZone,
   eveningDigest,
   headStarts,
   hourInZone,
+  instantAt,
   isAwake,
   placeStage,
   roundTo5,
@@ -23,8 +24,23 @@ const stage = (over: Partial<PrepStage> = {}): PrepStage => ({
   ...over,
 });
 
-/** A local wall-clock instant, written the way the tests read. */
-const at = (iso: string): Date => new Date(iso);
+/**
+ * A wall-clock instant *in Helsinki*, whatever zone the test runner uses.
+ *
+ * `new Date('2026-08-10T12:00:00')` parses as the runner's local time, so these
+ * tests passed on a Helsinki laptop and failed in CI under UTC — the same
+ * device-local assumption the module itself had. Building instants through the
+ * zone is what makes the suite mean the same thing everywhere.
+ */
+const at = (iso: string): Date => {
+  const [date, time] = iso.split('T');
+  const [year, month, day] = date!.split('-').map(Number);
+  const [hh, mm] = time!.split(':').map(Number);
+  return instantAt({ year: year!, month: month!, day: day! }, hh! + mm! / 60, ZONE);
+};
+
+/** The wall-clock hour in Helsinki, which is what every assertion here means. */
+const hourOf = (d: Date): number => hourInZone(d, ZONE);
 
 describe('serving times', () => {
   it('reads them from the DayStrip, so there is only one such table', () => {
@@ -37,8 +53,8 @@ describe('serving times', () => {
   it('rounds a computed time to something a person would write', () => {
     // Dinner sits at 18.2 because that is where the dot looks right on the
     // chart; unrounded arithmetic yields 17:12, which reads like a machine.
-    expect(roundTo5(at('2026-08-10T17:12:00')).getMinutes()).toBe(10);
-    expect(roundTo5(at('2026-08-10T17:13:00')).getMinutes()).toBe(15);
+    expect(hourOf(roundTo5(at('2026-08-10T17:12:00')))).toBeCloseTo(17 + 10 / 60, 5);
+    expect(hourOf(roundTo5(at('2026-08-10T17:13:00')))).toBeCloseTo(17 + 15 / 60, 5);
   });
 });
 
@@ -75,7 +91,7 @@ describe('placing a stage', () => {
     );
     expect(result.kind).toBe('placed');
     if (result.kind !== 'placed') return;
-    expect(result.at.getHours()).toBe(9);
+    expect(hourOf(result.at)).toBe(9);
     expect(result.tonight).toBe(false);
   });
 
@@ -86,7 +102,7 @@ describe('placing a stage', () => {
     const result = placeStage(stage({ lead: 120 }), serve, at('2026-08-10T06:00:00'), ZONE, BUFFER);
     expect(result.kind).toBe('placed');
     if (result.kind !== 'placed') return;
-    expect(result.at.getHours()).toBe(10);
+    expect(hourOf(result.at)).toBe(10);
   });
 
   it('moves the owner’s 8-hour lunch to the evening before, not to 03:00', () => {
@@ -102,7 +118,7 @@ describe('placing a stage', () => {
     expect(result.kind).toBe('placed');
     if (result.kind !== 'placed') return;
     expect(result.tonight).toBe(true);
-    expect(result.at.getDate()).toBe(9);
+    expect(dateKeyInZone(result.at, ZONE)).toBe('2026-08-09');
     expect(isAwake(result.at, ZONE)).toBe(true);
   });
 
@@ -258,10 +274,17 @@ describe('the week’s head starts', () => {
   });
 });
 
-describe('atHour', () => {
-  it('turns a fractional DayStrip hour into a wall-clock time', () => {
-    const result = atHour(at('2026-08-10T00:00:00'), 18.2);
-    expect(result.getHours()).toBe(18);
-    expect(result.getMinutes()).toBe(12);
+describe('instantAt', () => {
+  it('turns a fractional DayStrip hour into a wall-clock time in the zone', () => {
+    const result = instantAt({ year: 2026, month: 8, day: 10 }, 18.2, ZONE);
+    expect(hourOf(result)).toBeCloseTo(18 + 12 / 60, 5);
+  });
+
+  it('reads the same wall clock from a different runtime zone', () => {
+    // The property CI actually needed: the answer depends on the user's zone,
+    // never on the server's.
+    const helsinki = instantAt({ year: 2026, month: 8, day: 10 }, 12, 'Europe/Helsinki');
+    expect(hourInZone(helsinki, 'Europe/Helsinki')).toBe(12);
+    expect(hourInZone(helsinki, 'UTC')).toBe(9);
   });
 });
