@@ -82,3 +82,29 @@ test('the built app boots, onboards, and renders the four-tab shell', async ({ p
 
   expect(crashes, 'the page threw during boot').toEqual([]);
 });
+
+test('the app is installable, with icons that actually serve', async ({ page, request }) => {
+  // A missing icon is invisible in every other test: the page renders fine and
+  // iOS quietly uses a screenshot of it as the home-screen icon instead.
+  await page.goto('/');
+
+  const manifestHref = await page.getAttribute('link[rel="manifest"]', 'href');
+  expect(manifestHref).toBeTruthy();
+
+  const manifest = await (await request.get(manifestHref!)).json();
+  expect(manifest.name).toContain('Vire');
+  expect(manifest.display).toBe('standalone');
+
+  // Every icon the manifest promises, plus the two the page links directly.
+  const paths: string[] = [
+    ...manifest.icons.map((icon: { src: string }) => icon.src),
+    (await page.getAttribute('link[rel="apple-touch-icon"]', 'href'))!,
+    (await page.getAttribute('link[rel="icon"][type="image/svg+xml"]', 'href'))!,
+  ];
+
+  for (const path of paths) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(200);
+    expect(Number(response.headers()['content-length'] ?? 1), path).toBeGreaterThan(0);
+  }
+});

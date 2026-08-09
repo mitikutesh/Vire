@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Vire">
+  <!-- Square-cornered variant: for maskable and apple-touch icons, where the
+       platform supplies the shape. Baked-in corners would show as a notch
+       inside the mask the OS applies. -->
+  <!--
+    The Vire mark: a cloudberry sprout on paper.
+
+    Three deliberate constraints.
+
+    No font. The brand face ships as woff2 only, and a mark that depends on a font
+    renders differently in every rasteriser — including the browsers that draw this
+    file as a favicon.
+
+    No strokes, only filled paths. Stroke support is the first thing simple SVG
+    renderers get wrong: an earlier draft drew the stem with `stroke` and it
+    vanished entirely under ImageMagick while looking correct in a browser.
+
+    Optically centred, not mathematically. The mark's mass sits slightly above the
+    geometric centre, because a sprout wants headroom — centring it by bounding box
+    made it look like it was sliding off the bottom.
+
+    The stem is wider than it looks like it needs to be. At 32 px a graceful stem
+    is a hairline that antialiases away, leaving two floating leaves.
+
+    Palette is the locked one: paper ground, cloudberry leaves, deep-spruce stem.
+    A rounded square, because filled logo circles are out.
+  -->
+  <rect width="512" height="512" fill="#F1F2ED"/>
+
+  <!-- stem: deep spruce, tapering as it rises, rounded at the base -->
+  <path d="M236 376 C 236 320 241 280 246 230 L 274 233 C 267 283 263 324 263 376
+           C 263 392 236 392 236 376 Z"
+        fill="#14342B"/>
+
+  <!-- lower-left leaf -->
+  <path d="M252 310 C 190 310 132 268 128 204 C 192 206 246 248 252 310 Z" fill="#DD8F1F"/>
+
+  <!-- upper-right leaf, set higher so the pair reads as growth, not symmetry -->
+  <path d="M258 258 C 320 258 378 212 382 148 C 318 150 264 194 258 258 Z" fill="#DD8F1F"/>
+</svg>

@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F1F2ED" />
     <meta name="description" content="Vire — food, water and movement for one week at a time." />
+
+    <!-- SVG first: browsers that support it get a mark that stays sharp at any
+         density. The .ico carries 16/32/48 for everything else, including
+         bookmark bars that still ask for it by name. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <!-- iOS ignores the manifest's icons for the home screen and reads this. It is
+         the square-cornered variant, because iOS applies its own mask and baked-in
+         corners would show as a notch inside it. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
     <title>Vire</title>
   </head>
   <body>
