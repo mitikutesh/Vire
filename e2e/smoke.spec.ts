@@ -44,14 +44,35 @@ test('the built app boots, onboards, and renders the four-tab shell', async ({ p
 
   // A brand-new account has never weighed in, so the prompt is showing (I1).
   await expect(page.getByText(/Time for this week/)).toBeVisible();
-  // The Week tab opens on today and expands another day on tap — the one bit of
-  // real interaction in the shell so far.
+  // The Week tab opens on today and expands another day on tap.
+  //
+  // Asserted as the accordion's invariant rather than by naming a weekday: an
+  // earlier version of this test picked Sunday as "a day that isn't today", which
+  // passed six days a week and failed on the seventh. Which day is open depends on
+  // when the suite runs, so the test may not depend on the day at all.
   await page.getByRole('button', { name: 'Week', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible();
-  const sunday = page.getByRole('button', { name: /Sunday/ });
-  await expect(sunday).toHaveAttribute('aria-expanded', 'false');
-  await sunday.click();
-  await expect(sunday).toHaveAttribute('aria-expanded', 'true');
+
+  const dayToggle = page.locator('li button[aria-expanded]');
+  const openToggle = page.locator('li button[aria-expanded="true"]');
+  await expect(dayToggle).toHaveCount(7);
+  // Exactly one open on arrival — today's, auto-expanded.
+  await expect(openToggle).toHaveCount(1);
+
+  // Pinned by `aria-controls`, which does not change, rather than by
+  // `[aria-expanded="false"]`, which does: a Playwright locator is a lazy query,
+  // so a selector matching the attribute under test silently re-resolves to a
+  // different element the moment the click changes it.
+  const collapsedPanel = await page
+    .locator('li button[aria-expanded="false"]')
+    .first()
+    .getAttribute('aria-controls');
+  const target = page.locator(`li button[aria-controls="${collapsedPanel}"]`);
+
+  await target.click();
+  await expect(target).toHaveAttribute('aria-expanded', 'true');
+  // Still exactly one: opening a day closes the one before it.
+  await expect(openToggle).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Shop', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
