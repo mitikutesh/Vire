@@ -31,7 +31,7 @@ export function allergyRule(allergies: string): string {
 }
 
 export function dayGenerationPrompt(config: DayConfig): string {
-  const { weekday, target, sex, age, allergies } = config;
+  const { weekday, target, sex, age, allergies, avoid } = config;
   const budget = slotBudgets(target);
 
   return (
@@ -42,6 +42,7 @@ export function dayGenerationPrompt(config: DayConfig): string {
     ' cream, added sugar.' +
     allergyRule(allergies) +
     ` Day theme: ${THEMES[weekday]}.` +
+    avoidRule(avoid) +
     ` Meal kcal near: breakfast ${budget['b']}, lunch ${budget['l']},` +
     ` afternoon snack ${budget['s']}, dinner ${budget['d']}, evening bite ${budget['e']};` +
     ` the five k values must sum within 5% of ${target}.` +
@@ -72,4 +73,19 @@ export function offerScanPrompt({ items, city, today }: OfferScanRequest): strin
     ' deals; each deal text under 8 words, including the price when known; note is one short' +
     ' sentence on where the best savings are this week.'
   );
+}
+
+/**
+ * Ask for something other than what the user already has.
+ *
+ * Capped, because a long exclusion list crowds out the instructions that matter
+ * and costs input tokens on every one of the seven calls.
+ */
+export function avoidRule(avoid: readonly string[] | undefined): string {
+  const dishes = (avoid ?? [])
+    .map((dish) => dish.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  if (dishes.length === 0) return '';
+  return ` The user already has these dishes, so choose different ones: ${dishes.join('; ')}.`;
 }

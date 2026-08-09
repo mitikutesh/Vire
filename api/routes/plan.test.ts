@@ -6,6 +6,7 @@ import { UnauthorizedError, type VerifiedClaims } from '../auth/identity';
 import type { TokenVerifier } from '../auth/verifier';
 import { MemoryStore } from '../db/memory-store';
 import { ValidatingStore } from '../db/validating-store';
+import { starterPlan } from '@/content/starter-plan';
 import { VALID_DAY } from '../ai/fixtures';
 import { AiOutputError, type AiProvider } from '../ai/types';
 import { GENERATE_LIMIT_PER_DAY, planRoutes } from './plan';
@@ -424,5 +425,34 @@ describe('provider refusals (E7.6 follow-up)', () => {
 
     expect(peak).toBeLessThanOrEqual(3);
     expect(peak).toBeGreaterThan(1); // still concurrent, just bounded
+  });
+});
+
+describe('regenerating asks for something new', () => {
+  it('sends the current week’s dishes as dishes to avoid', async () => {
+    // The regenerate button is only meaningful if the second answer differs from
+    // the first.
+    const provider = okProvider();
+    const { generate, store } = await setup({ provider });
+
+    const userId = (await import('../auth/identity')).userIdFromClaims({ sub: ALICE });
+    const existing = await store.activatePlan(userId, starterPlan(1));
+    await sseEvents(await generate());
+
+    const config = (provider.generateDay as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as {
+      avoid?: string[];
+    };
+    expect(config.avoid).toContain(existing.days[0].b.n);
+  });
+
+  it('sends nothing to avoid on a first generation', async () => {
+    const provider = okProvider();
+    const { generate } = await setup({ provider });
+    await sseEvents(await generate());
+
+    const config = (provider.generateDay as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as {
+      avoid?: string[];
+    };
+    expect(config.avoid).toEqual([]);
   });
 });

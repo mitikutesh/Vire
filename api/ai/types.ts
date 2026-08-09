@@ -27,6 +27,14 @@ export interface DayConfig {
   age: number;
   /** Free text, exactly as the user typed it. Empty means no restrictions. */
   allergies: string;
+  /**
+   * Dishes the user already has, so a regenerated week is actually new (E2.4).
+   *
+   * Without this, regenerating asks the same question of the same model with the
+   * same prompt and unsurprisingly gets the same answer back — which makes the
+   * regenerate button look broken even when every part of it worked.
+   */
+  avoid?: readonly string[] | undefined;
 }
 
 /**

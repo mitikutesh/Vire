@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
+import { SLOTS } from '@/content/plan';
 import { WEEKDAYS } from '@/domain/constants';
 import type { PlanStreamEvent, ReportedDayState } from '@/domain/plan-stream';
 import { aggregateItems } from '@/domain/aggregate-items';
@@ -160,6 +161,17 @@ export function planRoutes({
     const provider = await providerFor(userId);
     if (!provider) return c.json({ error: 'no_ai_key' }, 409);
 
+    /**
+     * What the user already has, so a regeneration is not a re-run.
+     *
+     * Taken from the plan being replaced. On a first generation there is none, and
+     * the prompt simply omits the exclusion.
+     */
+    const current = await store.getActivePlan(userId);
+    const avoid = current
+      ? [...new Set(current.days.flatMap((day) => SLOTS.map((slot) => day[slot].n)))]
+      : [];
+
     const used = await store.bumpRateLimit(userId, 'generate', rateLimitDay(now()));
     if (used > GENERATE_LIMIT_PER_DAY) {
       return c.json({ error: 'rate_limited', limit: GENERATE_LIMIT_PER_DAY }, 429);
@@ -196,6 +208,7 @@ export function planRoutes({
               sex: profile.sex,
               age: profile.age,
               allergies: profile.allergies,
+              avoid,
             },
             (state) => send({ type: 'day', day: weekday, state }),
             retryDelayMs,

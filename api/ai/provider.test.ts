@@ -1,13 +1,20 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { STARTER_GROC } from '@/content/starter-plan';
+import { THEMES } from '@/content/plan';
 import { aggregateItems } from '@/domain/aggregate-items';
 import { AnthropicProvider } from './anthropic-provider';
 import { OpenAiProvider } from './openai-provider';
 import { canScanOffers, defaultModelFor, parseProviderId, providerForKey } from './provider';
 import { parseDay } from './parse';
 import { MAX_ITEMS_PER_DAY } from './types';
-import { allergyRule, dayGenerationPrompt, offerScanPrompt, slotBudgets } from './prompts';
+import {
+  allergyRule,
+  avoidRule,
+  dayGenerationPrompt,
+  offerScanPrompt,
+  slotBudgets,
+} from './prompts';
 import {
   DAY_JSON,
   DAY_JSON_FENCED,
@@ -245,5 +252,57 @@ describe('salvaging a day’s grocery rows', () => {
   it('names what drifted, so a log says more than "something"', () => {
     const broken = { ...VALID_DAY, b: { n: 'Nameless' } };
     expect(() => parseDay(JSON.stringify(broken), 3)).toThrow(/Day 3 failed validation at: b\./);
+  });
+});
+
+describe('asking for something new (regeneration)', () => {
+  it('names nothing to avoid on a first generation', () => {
+    expect(avoidRule(undefined)).toBe('');
+    expect(avoidRule([])).toBe('');
+  });
+
+  it('asks the model to choose different dishes', () => {
+    // Without this, regenerating asks the same question of the same model with the
+    // same prompt and gets the same answer — which makes a working button look
+    // broken.
+    const rule = avoidRule(['Blueberry oatmeal', 'Light salmon soup']);
+    expect(rule).toContain('Blueberry oatmeal');
+    expect(rule).toContain('Light salmon soup');
+    expect(rule).toMatch(/different/);
+  });
+
+  it('caps the list, so it cannot crowd out the instructions', () => {
+    // It is prepended to all seven calls, so length costs input tokens sevenfold.
+    const many = Array.from({ length: 40 }, (_, i) => `Dish ${i}`);
+    const rule = avoidRule(many);
+    expect(rule).toContain('Dish 11');
+    expect(rule).not.toContain('Dish 12');
+  });
+
+  it('reaches the prompt', () => {
+    const prompt = dayGenerationPrompt({
+      weekday: 0,
+      target: 1600,
+      sex: 'f',
+      age: 35,
+      allergies: '',
+      avoid: ['Blueberry oatmeal'],
+    });
+    expect(prompt).toContain('Blueberry oatmeal');
+  });
+});
+
+describe('the day themes', () => {
+  it('no longer name the starter week’s dishes', () => {
+    // They used to describe the curated week almost exactly, so a generated plan
+    // came back looking like the built-in one and regenerating changed nothing.
+    const joined = THEMES.join(' ').toLowerCase();
+    for (const dish of ['lohikeitto', 'tray bake', 'hernekeitto', 'uunilohi', 'oat pancakes']) {
+      expect(joined, dish).not.toContain(dish);
+    }
+  });
+
+  it('still gives each day a distinct angle', () => {
+    expect(new Set(THEMES).size).toBe(7);
   });
 });

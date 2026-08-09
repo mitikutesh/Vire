@@ -116,12 +116,25 @@ export const exerciseFor = (wd: WeekdayIndex): Exercise => EX[wd];
  * has deliberate variety instead of seven variations on the same day
  * (consumed by the generation route in E2.1).
  */
+/**
+ * A variety axis per day, Monday first.
+ *
+ * Structural, not prescriptive. An earlier version named the dishes — "oat
+ * porridge breakfast, salmon soup lunch, poultry tray bake dinner" — which had two
+ * effects nobody wanted: it described the curated starter week almost exactly, so
+ * a generated plan came back looking like the built-in one, and it pinned the
+ * output run to run, so regenerating produced the same menu again.
+ *
+ * These say what *kind* of day it is and leave the cooking to the model. The
+ * cholesterol-friendly constraints are not here — they live in the prompt's Style
+ * line, where they apply to every day rather than one.
+ */
 export const THEMES: readonly [string, string, string, string, string, string, string] = [
-  'Finnish classic: oat porridge breakfast, creamy-light salmon soup (lohikeitto) lunch, poultry tray bake dinner',
-  'Egg-and-rye breakfast, legume soup lunch (lentil or bean), oven-baked salmon (uunilohi style) dinner',
-  'Overnight oats breakfast, chicken grain bowl lunch, wholegrain pasta with canned fish dinner',
-  'Skyr bowl breakfast, Finnish pea soup (hernekeitto) lunch, Mediterranean chicken salad dinner',
-  'Warm oatmeal breakfast, smoked-fish wrap lunch, vegetarian chickpea or bean stew dinner',
-  'Vegetable omelette breakfast, rainbow trout with dill potatoes lunch, lean turkey mince dinner with lingonberry',
-  'Weekend oat pancakes breakfast, roast chicken lunch, Mediterranean fish & tomato stew with barley dinner',
+  'Finnish classic comfort — familiar home cooking, something warm at midday',
+  'Legume-forward — beans, lentils or peas carry one of the main meals',
+  'Bowls and wholegrain pasta — tinned or smoked fish as the protein',
+  'Nordic dairy and a traditional Finnish soup',
+  'Vegetarian dinner — no meat and no fish in the evening meal',
+  'Fresh fish day — trout, salmon or herring, simply cooked',
+  'Weekend cooking — something slower: a roast, a bake or a stew',
 ];
