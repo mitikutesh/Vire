@@ -35,18 +35,19 @@ die() {
   exit 1
 }
 
+# Only aws and gh. `gh api --jq` uses gh's own embedded jq, so a fresh machine
+# needs nothing else installed.
 command -v aws >/dev/null || die "the AWS CLI is not installed"
 command -v gh >/dev/null || die "the GitHub CLI is not installed"
-command -v jq >/dev/null || die "jq is not installed"
 
 # ─────────────────────────── who are we ───────────────────────────
 
-CALLER=$(aws sts get-caller-identity 2>&1) || die "AWS credentials are not valid.
-Authenticate first (aws configure, or aws sso login), then re-run.
+CALLER=$(aws sts get-caller-identity --query '[Account,Arn]' --output text 2>&1) || die "AWS credentials are not valid.
+Authenticate first (aws configure, aws configure sso, or aws sso login), then re-run.
 The CLI said: ${CALLER}"
 
-ACCOUNT_ID=$(echo "${CALLER}" | jq -r .Account)
-CALLER_ARN=$(echo "${CALLER}" | jq -r .Arn)
+ACCOUNT_ID=$(printf '%s' "${CALLER}" | cut -f1)
+CALLER_ARN=$(printf '%s' "${CALLER}" | cut -f2)
 
 GH_USER=$(gh api user --jq .login) || die "the GitHub CLI is not authenticated"
 [ "${GH_USER}" = "${REPO_OWNER}" ] || die "gh is acting as '${GH_USER}', not '${REPO_OWNER}'.
