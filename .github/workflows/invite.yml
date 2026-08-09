@@ -10,8 +10,9 @@ on:
     inputs:
       emails:
         description: >
-          Allowed addresses, comma-separated. A leading @ allows a whole domain,
-          e.g. "me@example.com, @mycompany.com". REPLACES the current list.
+          THE COMPLETE LIST of allowed addresses, comma-separated — this replaces
+          whatever is there, so include everyone, not just the new person. A
+          leading @ allows a whole domain, e.g. "me@example.com, @mycompany.com".
         required: true
         type: string
 
@@ -65,3 +66,16 @@ jobs:
         # deploy time and decrypts it at cold start, so setting the secret alone
         # leaves the pre-sign-up trigger enforcing the previous list.
         run: npx sst deploy --stage prod
+
+      - name: Show who can now register
+        # The list replaces rather than appends, so the one failure worth catching
+        # is having dropped someone by listing only the new invitee. Printing it
+        # back makes that visible in the run rather than at the moment someone
+        # cannot sign up. These are addresses the operator just typed, not a
+        # credential.
+        env:
+          EMAILS: ${{ inputs.emails }}
+        run: |
+          echo "The allowlist is now:"
+          printf '%s' "$EMAILS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+            | grep . | sed 's/^/  - /'
