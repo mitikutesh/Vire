@@ -20,6 +20,15 @@ export const SK = {
   profile: 'PROFILE',
   /** Exactly one active plan per user, so the sort key is a constant. */
   activePlan: 'PLAN#ACTIVE',
+  /**
+   * Days that generated before a run failed, so a retry resumes instead of
+   * paying for the whole week again (E2.1).
+   *
+   * Deliberately not a partial `PLAN#ACTIVE`: a stored plan is seven days by
+   * schema, and every view assumes it. A week with holes has to be a different
+   * item, invisible to everything except the generation route.
+   */
+  planDraft: 'PLAN#DRAFT',
   notifyPrefs: 'PREFS#NOTIFY',
 
   /** Checked boxes and store tags, scoped to the plan they belong to. */

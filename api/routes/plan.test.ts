@@ -9,7 +9,11 @@ import { ValidatingStore } from '../db/validating-store';
 import { starterPlan } from '@/content/starter-plan';
 import { VALID_DAY } from '../ai/fixtures';
 import { AiOutputError, type AiProvider } from '../ai/types';
-import { GENERATE_LIMIT_PER_DAY, planRoutes } from './plan';
+import { WEEKDAYS } from '@/domain/constants';
+import { GENERATE_LIMIT_PER_DAY, PLAN_DRAFT_TTL_MS, draftFingerprint, planRoutes } from './plan';
+
+/** Days in a generated week; the allowance is counted in provider calls. */
+const WEEK_LENGTH = WEEKDAYS.length;
 
 const ALICE = '11111111-1111-4111-8111-111111111111';
 const BOB = '22222222-2222-4222-8222-222222222222';
@@ -94,6 +98,17 @@ async function setup(options: { provider?: AiProvider | null; profile?: Profile 
     });
 
   return { app, store, provider: provider as AiProvider, generate };
+}
+
+/**
+ * Drive a generation to completion.
+ *
+ * The stream handler runs *while its body is read*, so a test that never
+ * consumes the response asserts against a route that has not finished — and a
+ * "nothing was written" assertion passes for the wrong reason.
+ */
+async function drain(response: Response): Promise<void> {
+  await response.text();
 }
 
 /** Collect the JSON payloads out of an SSE response body. */
@@ -227,11 +242,225 @@ describe('per-day retry (I2)', () => {
   });
 });
 
+describe('resuming a failed run (E2.1)', () => {
+  /** A provider whose failing days can be changed between requests. */
+  function controllable() {
+    const failing = new Set<number>();
+    const calls: number[] = [];
+    const provider = {
+      name: 'fake',
+      model: 'fake-1',
+      generateDay: vi.fn(async (config: { weekday: number; avoid?: readonly string[] }) => {
+        calls.push(config.weekday);
+        if (failing.has(config.weekday)) throw new AiOutputError('bad output');
+        return VALID_DAY;
+      }),
+      scanOffers: vi.fn(),
+    } as unknown as AiProvider;
+    return { provider, failing, calls };
+  }
+
+  const aliceId = async () => (await import('../auth/identity')).userIdFromClaims({ sub: ALICE });
+
+  it('regenerates only the day that failed', async () => {
+    // The whole point: the user pays per provider call, so a week that lost one
+    // day must cost one call to finish, not seven.
+    const { provider, failing, calls } = controllable();
+    const { generate, store } = await setup({ provider });
+
+    failing.add(3);
+    const first = await sseEvents(await generate());
+    expect(first.at(-1)).toMatchObject({ type: 'error', error: 'partial', failedDays: [3] });
+
+    failing.clear();
+    calls.length = 0;
+    const second = await sseEvents(await generate());
+
+    expect(calls).toEqual([3]);
+    expect(second.find((e) => e['type'] === 'plan')).toBeDefined();
+    expect((await store.getActivePlan(await aliceId()))?.days).toHaveLength(7);
+  });
+
+  it('reports the carried days as done, so the gate is not seven blank rows', async () => {
+    const { provider, failing } = controllable();
+    const { generate } = await setup({ provider });
+
+    failing.add(3);
+    await drain(await generate());
+    failing.clear();
+
+    const events = await sseEvents(await generate());
+    const done = events.filter((e) => e['type'] === 'day' && e['state'] === 'done');
+    expect(done).toHaveLength(7);
+    // The six carried days are announced before the one still being generated.
+    expect(events[0]).toMatchObject({ type: 'day', day: 0, state: 'done' });
+  });
+
+  it('discards the draft when the allergies changed underneath it', async () => {
+    // Health guardrail 3. Days generated before an allergen was added were asked
+    // to exclude a different list, so reusing them could put it back on the plate.
+    const { provider, failing, calls } = controllable();
+    const { generate, store } = await setup({ provider });
+
+    failing.add(3);
+    await drain(await generate());
+
+    await store.putProfile(await aliceId(), { ...PROFILE, allergies: 'peanuts, shellfish' });
+    failing.clear();
+    calls.length = 0;
+    await drain(await generate());
+
+    expect([...calls].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it('discards a draft that changed the calorie target', async () => {
+    const { provider, failing, calls } = controllable();
+    const { generate, store } = await setup({ provider });
+
+    failing.add(3);
+    await drain(await generate());
+
+    await store.putProfile(await aliceId(), { ...PROFILE, target: 1800 });
+    failing.clear();
+    calls.length = 0;
+    await drain(await generate());
+
+    expect(calls).toHaveLength(7);
+  });
+
+  it('does not resume a draft that has gone stale', async () => {
+    const { provider, calls } = controllable();
+    const { generate, store } = await setup({ provider });
+
+    // Same fingerprint, but older than the window: only the age disqualifies it.
+    await store.putPlanDraft(await aliceId(), {
+      fp: draftFingerprint(PROFILE),
+      created: new Date('2026-08-08T10:00:00Z').getTime() - PLAN_DRAFT_TTL_MS - 1,
+      days: WEEKDAYS.map((weekday) => (weekday === 3 ? null : VALID_DAY)),
+    });
+
+    await drain(await generate());
+    expect(calls).toHaveLength(7);
+  });
+
+  it('tells the retried day about the dishes already in the week', async () => {
+    // Without this the resumed day can duplicate a dish from the very week it is
+    // rejoining, which reads as a broken generator.
+    const { provider, failing } = controllable();
+    const { generate } = await setup({ provider });
+
+    failing.add(3);
+    await drain(await generate());
+    failing.clear();
+    (provider.generateDay as ReturnType<typeof vi.fn>).mockClear();
+    await drain(await generate());
+
+    const [config] = (provider.generateDay as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      { weekday: number; avoid?: readonly string[] },
+    ];
+    expect(config.weekday).toBe(3);
+    expect(config.avoid).toContain(VALID_DAY.b.n);
+  });
+
+  it('clears the draft once a plan is activated', async () => {
+    const { provider, failing } = controllable();
+    const { generate, store } = await setup({ provider });
+
+    failing.add(3);
+    await drain(await generate());
+    expect(await store.getPlanDraft(await aliceId())).not.toBeNull();
+
+    failing.clear();
+    await drain(await generate());
+    expect(await store.getPlanDraft(await aliceId())).toBeNull();
+  });
+
+  it('keeps the whole week when only the save failed, and retries without generating', async () => {
+    // Seven provider calls to recover from a database error was the worst case
+    // the old behaviour had.
+    const { provider, calls } = controllable();
+    const { generate, store } = await setup({ provider });
+
+    const activate = vi
+      .spyOn(store, 'activatePlan')
+      .mockRejectedValueOnce(new Error('dynamo is having a day'));
+
+    const first = await sseEvents(await generate());
+    expect(first.at(-1)).toMatchObject({ type: 'error', error: 'not_saved' });
+    expect(calls).toHaveLength(7);
+
+    activate.mockRestore();
+    calls.length = 0;
+    const second = await sseEvents(await generate());
+
+    expect(calls).toEqual([]);
+    expect(second.find((e) => e['type'] === 'plan')).toBeDefined();
+  });
+
+  it('writes no draft when the very first day of a run fails', async () => {
+    // Nothing salvageable: an all-null draft is a row that can only mislead.
+    const { provider, failing } = controllable();
+    const { generate, store } = await setup({ provider });
+
+    for (const weekday of WEEKDAYS) failing.add(weekday);
+    await drain(await generate());
+
+    expect(await store.getPlanDraft(await aliceId())).toBeNull();
+  });
+
+  it('charges the allowance per day generated, so resuming is cheap', async () => {
+    // If a resume cost a whole week's allowance, ten bad runs would lock the user
+    // out for the day having generated almost nothing.
+    const { provider, failing } = controllable();
+    const { generate, store } = await setup({ provider });
+    const bump = vi.spyOn(store, 'bumpRateLimit');
+
+    failing.add(3);
+    await drain(await generate());
+    failing.clear();
+    await drain(await generate());
+
+    expect(bump.mock.calls.map((call) => call[3])).toEqual([WEEK_LENGTH, 1]);
+    bump.mockRestore();
+  });
+
+  it('spends nothing when there is no day left to generate', async () => {
+    const { provider } = controllable();
+    const { generate, store } = await setup({ provider });
+    vi.spyOn(store, 'activatePlan').mockRejectedValueOnce(new Error('write failed'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await drain(await generate());
+    const bump = vi.spyOn(store, 'bumpRateLimit');
+    await drain(await generate());
+
+    // The second attempt only re-saves; charging for it would bill a database
+    // error to the user's AI allowance.
+    expect(bump).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('reports the failure even when the draft cannot be saved', async () => {
+    // The draft is an optimisation; losing it must not cost the user the error
+    // message that tells them what to do next.
+    const { provider, failing } = controllable();
+    const { generate, store } = await setup({ provider });
+    vi.spyOn(store, 'putPlanDraft').mockRejectedValue(new Error('write failed'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    failing.add(3);
+    const events = await sseEvents(await generate());
+    expect(events.at(-1)).toMatchObject({ type: 'error', error: 'partial' });
+    vi.restoreAllMocks();
+  });
+});
+
 describe('rate limiting', () => {
   it('allows the daily allowance and refuses the next request', async () => {
-    // This is the route that spends the owner's AI budget.
+    // This is the route that spends the owner's AI budget. The allowance is
+    // counted in provider calls, so a full week costs seven of it.
     const { generate } = await setup();
-    for (let i = 0; i < GENERATE_LIMIT_PER_DAY; i += 1) {
+    for (let i = 0; i < GENERATE_LIMIT_PER_DAY / WEEK_LENGTH; i += 1) {
       expect((await generate()).status).toBe(200);
     }
     const blocked = await generate();
@@ -241,7 +470,7 @@ describe('rate limiting', () => {
 
   it('counts per user, so one person cannot exhaust another’s allowance', async () => {
     const { generate, store } = await setup();
-    for (let i = 0; i < GENERATE_LIMIT_PER_DAY; i += 1) await generate();
+    for (let i = 0; i < GENERATE_LIMIT_PER_DAY / WEEK_LENGTH; i += 1) await generate();
 
     await store.putProfile(
       (await import('../auth/identity')).userIdFromClaims({ sub: BOB }),

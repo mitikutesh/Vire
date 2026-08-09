@@ -4,6 +4,7 @@ import { starterPlan } from '@/content/starter-plan';
 import { emptyLog } from '@/domain/log';
 import type { Profile } from '@/domain/schema';
 import { userIdFromClaims } from '../auth/identity';
+import { VALID_DAY } from '../ai/fixtures';
 import { MemoryStore } from './memory-store';
 import { ValidatingStore } from './validating-store';
 import type { UserId, VireStore } from './index';
@@ -121,6 +122,41 @@ describe('plan activation', () => {
     await db.activatePlan(alice, starterPlan(1_000));
     const second = await db.activatePlan(alice, starterPlan(2_000));
     expect((await db.getActivePlan(alice))?.planId).toBe(second.planId);
+  });
+
+  it('drops a generation draft, so an abandoned half-week cannot resume later', async () => {
+    // Activating *any* plan ends the run the draft belonged to — including the
+    // starter week, which is what the user picks when they give up on generating.
+    const db = store();
+    await db.putPlanDraft(alice, { fp: 'abc', created: 1_000, days: [VALID_DAY, null] });
+    await db.activatePlan(alice, starterPlan(2_000));
+    expect(await db.getPlanDraft(alice)).toBeNull();
+  });
+
+  it('clears a draft even when there was no previous plan', async () => {
+    // The first week can fail part-way, leaving a draft with nothing before it.
+    const db = store();
+    await db.putPlanDraft(alice, { fp: 'abc', created: 1_000, days: [VALID_DAY] });
+    await db.activatePlan(alice, starterPlan(1_000));
+    expect(await db.getPlanDraft(alice)).toBeNull();
+  });
+});
+
+describe('generation drafts', () => {
+  it('keeps one user’s draft out of another’s reach', async () => {
+    const db = store();
+    await db.putPlanDraft(alice, { fp: 'alice', created: 1_000, days: [VALID_DAY] });
+    expect(await db.getPlanDraft(bob)).toBeNull();
+    expect((await db.getPlanDraft(alice))?.fp).toBe('alice');
+  });
+
+  it('replaces rather than merges, so a shorter week cannot inherit stale days', async () => {
+    const db = store();
+    await db.putPlanDraft(alice, { fp: 'x', created: 1_000, days: [VALID_DAY, VALID_DAY] });
+    await db.putPlanDraft(alice, { fp: 'y', created: 2_000, days: [null, VALID_DAY] });
+    const draft = await db.getPlanDraft(alice);
+    expect(draft?.days[0]).toBeNull();
+    expect(draft?.fp).toBe('y');
   });
 });
 

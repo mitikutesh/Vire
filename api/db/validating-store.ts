@@ -7,7 +7,15 @@ import {
 } from '@/domain/schema';
 import type { AiKey, AiKeyStatus, DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
 import { assertDateKey, type UserId } from './keys';
-import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore } from './store';
+import type {
+  DatedLog,
+  DatedWeight,
+  GrocState,
+  OfferScan,
+  PlanDraft,
+  StoredPlan,
+  VireStore,
+} from './store';
 
 /**
  * Validation at the write boundary.
@@ -61,6 +69,18 @@ export class ValidatingStore implements VireStore {
     return this.inner.activatePlan(userId, planSchema.parse(plan));
   }
 
+  async getPlanDraft(userId: UserId): Promise<PlanDraft | null> {
+    return this.inner.getPlanDraft(userId);
+  }
+
+  // Deliberately not re-validated. Every day in a draft has already been through
+  // `generatedDaySchema` at the AI boundary, which is the untrusted edge; and the
+  // risk a draft actually carries is a stale *allergy* profile, which no schema
+  // can see. The fingerprint in the generation route is what guards that.
+  async putPlanDraft(userId: UserId, draft: PlanDraft): Promise<void> {
+    return this.inner.putPlanDraft(userId, draft);
+  }
+
   async getGrocState(userId: UserId, planId: string): Promise<GrocState> {
     return this.inner.getGrocState(userId, planId);
   }
@@ -97,8 +117,8 @@ export class ValidatingStore implements VireStore {
     return this.inner.listWeights(userId, limit);
   }
 
-  async bumpRateLimit(userId: UserId, action: string, day: string): Promise<number> {
-    return this.inner.bumpRateLimit(userId, action, assertDateKey(day));
+  async bumpRateLimit(userId: UserId, action: string, day: string, by?: number): Promise<number> {
+    return this.inner.bumpRateLimit(userId, action, assertDateKey(day), by);
   }
 
   async exportAll(userId: UserId): Promise<Record<string, unknown>[]> {

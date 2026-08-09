@@ -1,13 +1,14 @@
+import { createHash } from 'node:crypto';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { SLOTS } from '@/content/plan';
 import { WEEKDAYS } from '@/domain/constants';
 import type { PlanStreamEvent, ReportedDayState } from '@/domain/plan-stream';
 import { aggregateItems } from '@/domain/aggregate-items';
-import type { DayPlan, Plan } from '@/domain/schema';
+import type { DayPlan, Plan, Profile } from '@/domain/schema';
 import { UnauthorizedError, userIdFromClaims } from '../auth/identity';
 import { bearerToken, type TokenVerifier } from '../auth/verifier';
-import type { VireStore } from '../db/store';
+import type { PlanDraft, VireStore } from '../db/store';
 import type { ProviderForUser } from '../ai/for-user';
 import { classifyProviderError } from '../ai/types';
 import type { AiProvider, GeneratedDay } from '../ai/types';
@@ -27,8 +28,39 @@ import type { AiProvider, GeneratedDay } from '../ai/types';
  *    increment, because this is the one route that spends the owner's AI budget.
  */
 
-/** Per user, per day. Generous for one household, ruinous for a stranger. */
-export const GENERATE_LIMIT_PER_DAY = 10;
+/**
+ * Per user, per day, counted in **provider calls** rather than requests.
+ *
+ * Ten full weeks a day, which is generous for one household and ruinous for a
+ * stranger. Counting calls rather than requests is what makes resuming cheap:
+ * finishing a week that lost one day costs one, not seven.
+ */
+export const GENERATE_LIMIT_PER_DAY = 10 * WEEKDAYS.length;
+
+/**
+ * How long a failed run's days stay resumable.
+ *
+ * Long enough to cover making a coffee and tapping again, short enough that a
+ * week abandoned yesterday is not silently half-stale when it comes back. The
+ * DynamoDB TTL matches, but this check is the authoritative one: TTL deletion
+ * runs on its own schedule and can return an expired item for hours.
+ */
+export const PLAN_DRAFT_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * What the days in a draft were generated against.
+ *
+ * Compared before any day is reused. `allergies` is the reason this exists at
+ * all: reusing a day generated before the user added an allergen would put that
+ * allergen back on their plate, and the app's loudest promise is that generated
+ * plans exclude what they listed. `target`, `age` and `sex` ride along because
+ * they set the calorie budget each meal was written to.
+ */
+export function draftFingerprint(profile: Profile): string {
+  return createHash('sha256')
+    .update(JSON.stringify([profile.target, profile.sex, profile.age, profile.allergies.trim()]))
+    .digest('hex');
+}
 
 /** Attempts per day before the week is declared failed. */
 const ATTEMPTS_PER_DAY = 3;
@@ -132,6 +164,24 @@ function toDayPlan(generated: GeneratedDay): DayPlan {
   return day;
 }
 
+/**
+ * Whether a stored draft may be resumed.
+ *
+ * Two independent reasons to refuse, and the fingerprint is the one that
+ * matters: it is what stops a day generated under the user's old allergies
+ * being served after they have added one. Age is the lesser check, for a week
+ * someone walked away from.
+ */
+export function usableDraft(
+  draft: PlanDraft | null,
+  fingerprint: string,
+  nowMs: number,
+): draft is PlanDraft {
+  if (!draft) return false;
+  if (draft.fp !== fingerprint) return false;
+  return nowMs - draft.created < PLAN_DRAFT_TTL_MS;
+}
+
 export function planRoutes({
   store,
   verifier,
@@ -162,19 +212,47 @@ export function planRoutes({
     if (!provider) return c.json({ error: 'no_ai_key' }, 409);
 
     /**
+     * Days salvaged from a previous run that failed part-way (E2.1).
+     *
+     * `usableDraft` is where the health guardrail lives: a draft whose
+     * fingerprint no longer matches the profile is discarded rather than
+     * resumed, because its days were written against allergies or a calorie
+     * target the user has since changed.
+     */
+    const fp = draftFingerprint(profile);
+    const draft = await store.getPlanDraft(userId);
+    const carried: (GeneratedDay | null)[] = usableDraft(draft, fp, now().getTime())
+      ? // Length is normalised: a draft from an older shape must not silently
+        // produce a six-day week further down.
+        WEEKDAYS.map((weekday) => draft?.days[weekday] ?? null)
+      : WEEKDAYS.map(() => null);
+
+    const todo = WEEKDAYS.filter((weekday) => carried[weekday] == null);
+
+    /**
      * What the user already has, so a regeneration is not a re-run.
      *
-     * Taken from the plan being replaced. On a first generation there is none, and
-     * the prompt simply omits the exclusion.
+     * Both the plan being replaced *and* the days already carried: without the
+     * latter, a resumed day can duplicate a dish from the same week it is about
+     * to rejoin. On a first generation there is neither, and the prompt simply
+     * omits the exclusion.
      */
     const current = await store.getActivePlan(userId);
-    const avoid = current
-      ? [...new Set(current.days.flatMap((day) => SLOTS.map((slot) => day[slot].n)))]
-      : [];
+    const avoid = [
+      ...new Set([
+        ...(current?.days.flatMap((day) => SLOTS.map((slot) => day[slot].n)) ?? []),
+        ...carried.flatMap((day) => (day ? SLOTS.map((slot) => day[slot].n) : [])),
+      ]),
+    ];
 
-    const used = await store.bumpRateLimit(userId, 'generate', rateLimitDay(now()));
-    if (used > GENERATE_LIMIT_PER_DAY) {
-      return c.json({ error: 'rate_limited', limit: GENERATE_LIMIT_PER_DAY }, 429);
+    // Metered in provider calls, so finishing a week costs what it actually
+    // spends. Skipped entirely when there is nothing to generate: a draft that
+    // completed and only failed to *save* should not pay to be saved again.
+    if (todo.length > 0) {
+      const used = await store.bumpRateLimit(userId, 'generate', rateLimitDay(now()), todo.length);
+      if (used > GENERATE_LIMIT_PER_DAY) {
+        return c.json({ error: 'rate_limited', limit: GENERATE_LIMIT_PER_DAY }, 429);
+      }
     }
 
     // Progress is streamed, so the response has already started by the time a
@@ -185,6 +263,26 @@ export function planRoutes({
       const send = (event: PlanStreamEvent) => stream.writeSSE({ data: JSON.stringify(event) });
 
       /**
+       * Persist what came back, for the next attempt to resume from.
+       *
+       * Swallows its own failure on purpose. This runs on the two paths that are
+       * already reporting a problem, and turning a failed *optimisation* into a
+       * failed response would replace a recoverable error with a worse one.
+       */
+      const saveDraft = async (days: (GeneratedDay | null)[], fingerprint: string) => {
+        if (!days.some(Boolean)) return; // nothing salvageable; do not write an empty week
+        try {
+          await store.putPlanDraft(userId, {
+            fp: fingerprint,
+            created: now().getTime(),
+            days,
+          });
+        } catch (error) {
+          console.error('Saving the generation draft failed; the retry will regenerate', error);
+        }
+      };
+
+      /**
        * Days run a few at a time rather than all seven at once.
        *
        * Each finished day still reports as soon as it lands, so the gate's list
@@ -193,8 +291,15 @@ export function planRoutes({
        * per-minute allowance, and a rate-limited day costs a 20-second wait —
        * which is far more than the concurrency buys back.
        */
-      const results: (GeneratedDay | null)[] = new Array(WEEKDAYS.length).fill(null);
-      const queue = [...WEEKDAYS];
+      const results: (GeneratedDay | null)[] = [...carried];
+      const queue = [...todo];
+
+      // Carried days are reported before any work starts, so a resumed run shows
+      // six ticks and one spinner rather than seven rows that sit on "waiting"
+      // and then finish impossibly fast.
+      for (const weekday of WEEKDAYS) {
+        if (results[weekday]) await send({ type: 'day', day: weekday, state: 'done' });
+      }
 
       const worker = async () => {
         for (;;) {
@@ -221,8 +326,13 @@ export function planRoutes({
 
       if (results.some((day) => day === null)) {
         const failed = results.flatMap((day, i) => (day === null ? [i] : []));
-        // The client offers the starter plan here; a partial week would be worse
-        // than none, because a day with no food is a day the user cannot follow.
+        // Keep whatever did come back, so "Try again" pays for the missing days
+        // only. Best-effort: a draft that fails to save costs the user a repeat
+        // of work they have already paid for, which is not worth losing the
+        // failure they actually need to see.
+        await saveDraft(results, fp);
+        // The client still offers the starter plan here; a partial week would be
+        // worse than none, because a day with no food is a day nobody can follow.
         await send({ type: 'error', error: 'partial', failedDays: failed });
         return;
       }
@@ -245,6 +355,11 @@ export function planRoutes({
         await send({ type: 'plan', plan: stored });
       } catch (error) {
         console.error('Activating the generated plan failed', error);
+        // The week is complete and only the write failed, so the draft holds all
+        // seven days: retrying re-attempts the save and generates nothing. This
+        // is the case where regenerating from scratch was most obviously wrong —
+        // seven provider calls to recover from a database error.
+        await saveDraft(results, fp);
         await send({ type: 'error', error: 'not_saved' });
       }
     });

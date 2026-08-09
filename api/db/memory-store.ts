@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { AiKey, AiKeyStatus, DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
 import { SK, SK_PREFIX, UNEXPORTABLE_SK, assertDateKey, pk, type UserId } from './keys';
-import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore } from './store';
+import type {
+  DatedLog,
+  DatedWeight,
+  GrocState,
+  OfferScan,
+  PlanDraft,
+  StoredPlan,
+  VireStore,
+} from './store';
 
 /**
  * In-memory implementation of the store.
@@ -56,11 +64,22 @@ export class MemoryStore implements VireStore {
     // old plan's derived state goes, or nothing changes.
     const stored: StoredPlan = { ...plan, planId: randomUUID() };
     partition.set(SK.activePlan, structuredClone(stored));
+    // Unconditional, like the transaction: a draft can outlive a run that never
+    // produced a previous plan at all.
+    partition.delete(SK.planDraft);
     if (previous) {
       partition.delete(SK.grocState(previous.planId));
       partition.delete(SK.offers(previous.planId));
     }
     return structuredClone(stored);
+  }
+
+  async getPlanDraft(userId: UserId): Promise<PlanDraft | null> {
+    return structuredClone(this.read<PlanDraft>(userId, SK.planDraft));
+  }
+
+  async putPlanDraft(userId: UserId, draft: PlanDraft): Promise<void> {
+    this.write(userId, SK.planDraft, draft);
   }
 
   async getGrocState(userId: UserId, planId: string): Promise<GrocState> {
@@ -122,9 +141,9 @@ export class MemoryStore implements VireStore {
     return out;
   }
 
-  async bumpRateLimit(userId: UserId, action: string, day: string): Promise<number> {
+  async bumpRateLimit(userId: UserId, action: string, day: string, by = 1): Promise<number> {
     const sk = SK.rateLimit(action, assertDateKey(day));
-    const next = (this.read<{ count: number }>(userId, sk)?.count ?? 0) + 1;
+    const next = (this.read<{ count: number }>(userId, sk)?.count ?? 0) + by;
     this.write(userId, sk, { count: next });
     return next;
   }

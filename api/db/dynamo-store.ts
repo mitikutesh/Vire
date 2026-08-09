@@ -13,7 +13,15 @@ import {
 import { OFFER_TTL_MS } from '@/domain/offers';
 import type { AiKey, AiKeyStatus, DailyLog, Plan, Profile, WeightEntry } from '@/domain/schema';
 import { SK, SK_PREFIX, UNEXPORTABLE_SK, assertDateKey, pk, type UserId } from './keys';
-import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore } from './store';
+import type {
+  DatedLog,
+  DatedWeight,
+  GrocState,
+  OfferScan,
+  PlanDraft,
+  StoredPlan,
+  VireStore,
+} from './store';
 
 /** Cached offer scans expire on their own; nothing has to sweep them. */
 // Derived from the shared window rather than restated: the client uses the same
@@ -22,6 +30,14 @@ import type { DatedLog, DatedWeight, GrocState, OfferScan, StoredPlan, VireStore
 const OFFERS_TTL_SECONDS = OFFER_TTL_MS / 1000;
 /** Rate-limit counters only matter for the day they cover. */
 const RATE_LIMIT_TTL_SECONDS = 48 * 60 * 60;
+/**
+ * Generation drafts are swept an hour after the failed run.
+ *
+ * The sweep is hygiene, not correctness: the route checks the draft's age
+ * itself, because DynamoDB deletes on its own schedule and can hand back an
+ * expired item for hours. Matches PLAN_DRAFT_TTL_MS in the route.
+ */
+const PLAN_DRAFT_TTL_SECONDS = 60 * 60;
 
 const BATCH_DELETE_SIZE = 25; // DynamoDB's BatchWriteItem limit
 
@@ -112,6 +128,15 @@ export class DynamoStore implements VireStore {
               Item: { pk: partition, sk: SK.activePlan, ...stored },
             },
           },
+          // Unconditional: a draft may exist with no previous plan at all (the
+          // first week failed part-way), and a Delete on a missing item is a
+          // no-op rather than an error.
+          {
+            Delete: {
+              TableName: this.tableName,
+              Key: { pk: partition, sk: SK.planDraft },
+            },
+          },
           ...(previous
             ? [
                 {
@@ -133,6 +158,17 @@ export class DynamoStore implements VireStore {
     );
 
     return stored;
+  }
+
+  getPlanDraft(userId: UserId): Promise<PlanDraft | null> {
+    return this.get<PlanDraft>(userId, SK.planDraft);
+  }
+
+  async putPlanDraft(userId: UserId, draft: PlanDraft): Promise<void> {
+    await this.put(userId, SK.planDraft, {
+      ...draft,
+      expiresAt: nowSeconds() + PLAN_DRAFT_TTL_SECONDS,
+    });
   }
 
   async getGrocState(userId: UserId, planId: string): Promise<GrocState> {
@@ -189,21 +225,21 @@ export class DynamoStore implements VireStore {
    * Atomic increment. Two generate requests arriving together must not both
    * read "0 used" and both proceed — the counter is what keeps AI spend bounded.
    */
-  async bumpRateLimit(userId: UserId, action: string, day: string): Promise<number> {
+  async bumpRateLimit(userId: UserId, action: string, day: string, by = 1): Promise<number> {
     const { Attributes } = await this.doc.send(
       new UpdateCommand({
         TableName: this.tableName,
         Key: { pk: pk(userId), sk: SK.rateLimit(action, assertDateKey(day)) },
-        UpdateExpression: 'ADD #count :one SET #expiresAt = :expiresAt',
+        UpdateExpression: 'ADD #count :by SET #expiresAt = :expiresAt',
         ExpressionAttributeNames: { '#count': 'count', '#expiresAt': 'expiresAt' },
         ExpressionAttributeValues: {
-          ':one': 1,
+          ':by': by,
           ':expiresAt': nowSeconds() + RATE_LIMIT_TTL_SECONDS,
         },
         ReturnValues: 'UPDATED_NEW',
       }),
     );
-    return Number(Attributes?.['count'] ?? 1);
+    return Number(Attributes?.['count'] ?? by);
   }
 
   async getAiKey(userId: UserId): Promise<AiKey | null> {
